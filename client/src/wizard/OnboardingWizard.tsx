@@ -1,9 +1,17 @@
+import { useEffect } from 'react'
 import { WizardSteps } from '@/wizard/WizardSteps'
 import { useUIStore } from '@/store/uiStore'
 
 export function OnboardingWizard() {
   const wizard = useUIStore((state) => state.wizard)
   const setWizardOpen = useUIStore((state) => state.setWizardOpen)
+
+  useEffect(() => {
+    if (wizard.open) {
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = '' }
+    }
+  }, [wizard.open])
 
   if (!wizard.open) return null
 
