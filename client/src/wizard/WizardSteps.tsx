@@ -501,7 +501,7 @@ export function WizardSteps() {
   }
 
   return (
-    <div className="flex flex-col" style={{ maxHeight: 'calc(100vh - 48px)' }}>
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-shrink-0 border-b border-[color:var(--border)] px-6 py-5 sm:px-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

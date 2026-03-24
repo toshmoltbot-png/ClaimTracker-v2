@@ -10,13 +10,12 @@ export function OnboardingWizard() {
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950 px-4 py-6"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-950 p-4 sm:p-6"
       onClick={() => setWizardOpen(false)}
       role="dialog"
     >
       <div
-        className="panel-elevated mx-auto flex w-full max-w-6xl flex-col overflow-hidden rounded-[28px]"
-        style={{ maxHeight: 'calc(100vh - 48px)' }}
+        className="panel-elevated flex w-full max-w-6xl flex-col overflow-hidden rounded-[28px]"
         onClick={(event) => event.stopPropagation()}
       >
         <WizardSteps />

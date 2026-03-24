@@ -9,6 +9,8 @@ export const NAVY: [number, number, number] = [15, 40, 80]
 export const LIGHT_BLUE: [number, number, number] = [235, 242, 255]
 const LIGHT_GRAY: [number, number, number] = [245, 245, 245]
 const GRAY: [number, number, number] = [120, 120, 120]
+const YELLOW_BG: [number, number, number] = [255, 251, 235]
+const YELLOW_BORDER: [number, number, number] = [217, 119, 6]
 
 export interface PDFSectionContext {
   doc: jsPDF
@@ -83,6 +85,61 @@ function sectionHeader(ctx: PDFSectionContext, title: string) {
 
 function normalizeClaimDate(value: string | null | undefined) {
   return fmtUSDate(value || '') || value || 'N/A'
+}
+
+function parseMoneyLike(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const cleaned = String(value ?? '').replace(/[^0-9.\-]/g, '')
+  const parsed = Number.parseFloat(cleaned)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function hasMeaningfulValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0
+  if (value && typeof value === 'object') return Object.values(value).some((entry) => hasMeaningfulValue(entry))
+  if (typeof value === 'boolean') return value
+  return String(value ?? '').trim() !== ''
+}
+
+function formatCurrencyOrNA(value: unknown) {
+  const amount = parseMoneyLike(value)
+  return amount > 0 ? formatCurrency(amount) : 'N/A'
+}
+
+function getClaimFinancials(ctx: PDFSectionContext) {
+  const contentsTotal = ctx.contents.reduce((sum, item) => sum + getItemTotalValue(item), 0)
+  const expensesTotal = getExpensesTotal(ctx.data.expenses)
+  const deductible = parseMoneyLike(ctx.data.dashboard?.deductible)
+  const totalClaimed = contentsTotal + expensesTotal - deductible
+  const totalPaid = getPaymentsTotal(ctx.payments)
+  const outstanding = totalClaimed - totalPaid
+  const depreciation = ctx.contents.reduce((sum, item) => {
+    const replacement = getItemTotalValue(item)
+    const approved = parseMoneyLike(item.approvedAmount)
+    return approved > 0 && replacement > approved ? sum + (replacement - approved) : sum
+  }, 0)
+  return {
+    contentsTotal,
+    expensesTotal,
+    deductible,
+    totalClaimed,
+    totalPaid,
+    outstanding,
+    depreciation,
+  }
+}
+
+function getAdjusterPhone(data: ClaimData) {
+  return String(data.dashboard?.adjusterPhone || data.claim?.adjusterPhone || '').trim()
+}
+
+function formatClaimLabel(value: string | null | undefined) {
+  const raw = String(value || '').trim()
+  if (!raw) return 'N/A'
+  return raw
+    .replace(/_/g, ' ')
+    .replace(/category\s*3/gi, 'Category 3')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
 function getFileSrc(fileItem: FileItem | AIPhoto | string | null | undefined) {
