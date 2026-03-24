@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, type ReactElement } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Header } from '@/components/layout/Header'
 import { TabBar } from '@/components/layout/TabBar'
@@ -25,6 +25,7 @@ import { Contractors } from '@/tabs/Contractors/Contractors'
 import { Payments } from '@/tabs/Payments/Payments'
 import { Maximizer } from '@/tabs/Maximizer/Maximizer'
 import { OnboardingWizard } from '@/wizard/OnboardingWizard'
+import { getStoredOnboardingStep, shouldShowOnboarding } from '@/lib/claimWorkflow'
 
 const tabComponents: Record<Exclude<ClaimTabId, 'maximizer'>, ReactElement> = {
   dashboard: <Dashboard />,
@@ -44,10 +45,14 @@ const tabComponents: Record<Exclude<ClaimTabId, 'maximizer'>, ReactElement> = {
 
 function MainShell() {
   const hydrate = useClaimStore((state) => state.hydrate)
+  const hydrated = useClaimStore((state) => state.hydrated)
+  const data = useClaimStore((state) => state.data)
   const activeTab = useUIStore((state) => state.activeTab)
   const setActiveTab = useUIStore((state) => state.setActiveTab)
+  const openWizard = useUIStore((state) => state.openWizard)
   const location = useLocation()
   const navigate = useNavigate()
+  const autoOpenedWizardRef = useRef(false)
 
   useEffect(() => {
     setupClaimAutosave()
@@ -60,6 +65,15 @@ function MainShell() {
       setActiveTab(hash as ClaimTabId)
     }
   }, [location.hash, setActiveTab])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (autoOpenedWizardRef.current) return
+    if (shouldShowOnboarding(data)) {
+      autoOpenedWizardRef.current = true
+      openWizard(getStoredOnboardingStep(), true)
+    }
+  }, [data, hydrated, openWizard])
 
   const currentTab = useMemo(() => {
     return CLAIM_TABS.includes(activeTab) && activeTab !== 'maximizer' ? activeTab : 'dashboard'

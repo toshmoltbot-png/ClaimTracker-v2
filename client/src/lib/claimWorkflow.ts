@@ -18,6 +18,8 @@ import type {
   DashboardData,
   ExpenseEntry,
   Expenses,
+  FileItem,
+  FloorPlan,
   Payment,
   PolicyDoc,
   QuantityUnit,
@@ -27,6 +29,10 @@ import type {
   TimelineEvent,
 } from '@/types/claim'
 import type { EnrichItemResponse } from '@/types/api'
+
+export const ONBOARDING_COMPLETE_KEY = 'claimtracker_onboarding_complete'
+export const ONBOARDING_STEP_KEY = 'claimtracker_wizard_step'
+export const ONBOARDING_TIP_PREFIX = 'claimtracker_onboarding_tip_'
 
 export const CLAIM_TYPE_OPTIONS: Array<{ value: ClaimType; label: string }> = [
   { value: 'category3_sewage', label: 'Sewage Backup' },
@@ -117,6 +123,37 @@ export interface ReadinessCheck {
   label: string
   description: string
   complete: boolean
+}
+
+export interface FloorPlanRoomLayout {
+  id: string
+  roomId: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  centerX: number
+  centerY: number
+  color: string
+  label: string
+  dimensionsLabel: string
+  sqft: number
+  visible: boolean
+}
+
+export interface PhotoLibraryEntry {
+  id: string
+  sourceType: 'library' | 'room' | 'ai'
+  photo: FileItem | AIPhoto
+  roomId: string | null
+  roomName: string
+  name: string
+  previewUrl: string
+  uploadedAt: string
+  analysisMode: AnalysisMode | ''
+  aiResultId: string | null
+  aiItemCount: number
 }
 
 export function formatCurrency(value: number | null | undefined) {
@@ -358,6 +395,232 @@ export function updateRoomDimensions(room: Room): Room {
     sqft: sqft || '',
     dimensions: length && width ? `${length} x ${width}` : '',
   }
+}
+
+export function ensureFloorPlanSettings(floorPlan: FloorPlan | null | undefined): FloorPlan {
+  return {
+    ...(floorPlan || {}),
+    snapEnabled: floorPlan?.snapEnabled ?? true,
+    showConnections: floorPlan?.showConnections ?? true,
+    showLabels: floorPlan?.showLabels ?? true,
+    showDimensions: floorPlan?.showDimensions ?? true,
+    scale: Number(floorPlan?.scale || 0) || undefined,
+  }
+}
+
+export function getRoomDimensions(room: Room) {
+  const length = parseNumber(room.length)
+  const width = parseNumber(room.width)
+  if (length > 0 && width > 0) {
+    return {
+      length,
+      width,
+      warning: false,
+      label: `${length.toFixed(1)} x ${width.toFixed(1)} ft`,
+    }
+  }
+  const sqft = parseNumber(room.sqft)
+  if (sqft > 0) {
+    const side = Math.sqrt(sqft)
+    return {
+      length: side,
+      width: side,
+      warning: false,
+      label: `${sqft.toFixed(1)} sq ft`,
+    }
+  }
+  return {
+    length: 10,
+    width: 10,
+    warning: true,
+    label: 'No dimensions',
+  }
+}
+
+export function getRoomColor(name: string | null | undefined) {
+  const key = String(name || '').toLowerCase()
+  const palettes = [
+    { match: ['kitchen'], fill: '#f59e0b' },
+    { match: ['bath', 'bathroom', 'wash'], fill: '#38bdf8' },
+    { match: ['bed', 'bedroom'], fill: '#a78bfa' },
+    { match: ['living', 'family'], fill: '#34d399' },
+    { match: ['hall', 'entry', 'foyer'], fill: '#f472b6' },
+    { match: ['laundry'], fill: '#fb7185' },
+    { match: ['garage'], fill: '#94a3b8' },
+    { match: ['basement'], fill: '#60a5fa' },
+    { match: ['office', 'study'], fill: '#f97316' },
+  ]
+  return palettes.find((palette) => palette.match.some((entry) => key.includes(entry)))?.fill || '#334155'
+}
+
+export function computeFloorPlanScale(containerWidth: number, containerHeight: number, rooms: Room[]) {
+  const padding = 32
+  const usableWidth = Math.max(200, containerWidth - padding)
+  const usableHeight = Math.max(240, containerHeight - padding)
+  const maxRoomDim = Math.max(
+    10,
+    ...(rooms || []).map((room) => {
+      const dims = getRoomDimensions(room)
+      return Math.max(dims.length, dims.width)
+    }),
+  )
+  let scale = 20
+  if (maxRoomDim * scale > Math.min(usableWidth, usableHeight) * 0.8) {
+    scale = Math.floor((Math.min(usableWidth, usableHeight) * 0.8) / maxRoomDim)
+  }
+  return Math.max(8, Math.min(24, scale || 20))
+}
+
+export function snapFloorPlanPoint(x: number, y: number, scale: number, enabled: boolean) {
+  if (!enabled) return { x, y }
+  const grid = Math.max(8, scale)
+  return {
+    x: Math.round(x / grid) * grid,
+    y: Math.round(y / grid) * grid,
+  }
+}
+
+export function buildFloorPlanRooms(containerWidth: number, containerHeight: number, rooms: Room[], floorPlan?: FloorPlan | null): FloorPlanRoomLayout[] {
+  const scale = ensureFloorPlanSettings(floorPlan).scale || computeFloorPlanScale(containerWidth, containerHeight, rooms)
+  const padding = 18
+  const gap = 18
+  let currentX = padding
+  let currentY = padding
+  let columnWidth = 0
+
+  return rooms.map((room) => {
+    const dims = getRoomDimensions(room)
+    const width = Math.max(32, Math.round(dims.width * scale))
+    const height = Math.max(32, Math.round(dims.length * scale))
+    const hasStoredPosition = Number.isFinite(room.floorPlanX) && Number.isFinite(room.floorPlanY)
+    if (!hasStoredPosition) {
+      if (currentY + height > containerHeight - padding) {
+        currentY = padding
+        currentX += columnWidth + gap
+        columnWidth = 0
+      }
+      columnWidth = Math.max(columnWidth, width)
+    }
+    const centerX = hasStoredPosition ? parseNumber(room.floorPlanX) * scale : currentX + width / 2
+    const centerY = hasStoredPosition ? parseNumber(room.floorPlanY) * scale : currentY + height / 2
+    if (!hasStoredPosition) {
+      currentY += height + gap
+    }
+    return {
+      id: `room-${room.id}`,
+      roomId: room.id,
+      name: String(room.name || 'Room'),
+      x: centerX - width / 2,
+      y: centerY - height / 2,
+      width,
+      height,
+      centerX,
+      centerY,
+      color: getRoomColor(room.name),
+      label: String(room.name || 'Room'),
+      dimensionsLabel: dims.label,
+      sqft: parseNumber(room.sqft) || Number((dims.length * dims.width).toFixed(1)),
+      visible: room.floorPlanVisible !== false,
+    }
+  })
+}
+
+export function computeFloorPlanUnionSqft(rooms: Array<Pick<FloorPlanRoomLayout, 'x' | 'y' | 'width' | 'height' | 'visible'>>, scale: number) {
+  const visible = rooms.filter((room) => room.visible !== false && room.width > 0 && room.height > 0)
+  if (!visible.length || !scale) return 0
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  visible.forEach((room) => {
+    minX = Math.min(minX, room.x)
+    minY = Math.min(minY, room.y)
+    maxX = Math.max(maxX, room.x + room.width)
+    maxY = Math.max(maxY, room.y + room.height)
+  })
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.ceil(maxX - minX))
+  canvas.height = Math.max(1, Math.ceil(maxY - minY))
+  const context = canvas.getContext('2d')
+  if (!context) return 0
+  context.fillStyle = '#fff'
+  visible.forEach((room) => {
+    context.fillRect(room.x - minX, room.y - minY, room.width, room.height)
+  })
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+  let filled = 0
+  for (let index = 3; index < pixels.length; index += 4) {
+    if (pixels[index] > 0) filled += 1
+  }
+  return Number((filled / (scale * scale)).toFixed(1))
+}
+
+export function toggleFloorPlanSnap(data: ClaimData, enabled: boolean) {
+  return {
+    ...data,
+    floorPlan: {
+      ...ensureFloorPlanSettings(data.floorPlan),
+      snapEnabled: enabled,
+    },
+  }
+}
+
+export function updateFloorPlanVisibility(data: ClaimData, roomId: string, visible: boolean) {
+  return {
+    ...data,
+    rooms: data.rooms.map((room) => (
+      String(room.id) === String(roomId) ? { ...room, floorPlanVisible: visible } : room
+    )),
+  }
+}
+
+function hasExistingClaimData(data: ClaimData) {
+  const dashboard = data.dashboard || ({} as ClaimData['dashboard'])
+  const claim = data.claim || ({} as ClaimData['claim'])
+  const dashboardFilled = Object.values(dashboard).some((value) => String(value || '').trim())
+  const claimFilled = Object.values(claim).some((value) => String(value || '').trim())
+  if (dashboardFilled || claimFilled) return true
+  const arrays: Array<keyof ClaimData> = [
+    'rooms',
+    'contents',
+    'contractors',
+    'contractorReports',
+    'communications',
+    'payments',
+    'photoLibrary',
+    'policyDocs',
+    'receipts',
+    'aiPhotos',
+    'aiResults',
+    'followUpTasks',
+    'reportChecklist',
+  ]
+  if (arrays.some((key) => Array.isArray(data[key]) && (data[key] as unknown[]).length > 0)) return true
+  return getExpensesTotal(data.expenses) > 0
+}
+
+export function getStoredOnboardingStep() {
+  if (typeof window === 'undefined') return 1
+  return Math.max(1, Number(localStorage.getItem(ONBOARDING_STEP_KEY) || 1))
+}
+
+export function setStoredOnboardingStep(step: number) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(ONBOARDING_STEP_KEY, String(Math.max(1, step)))
+}
+
+export function markOnboardingComplete() {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true')
+  localStorage.removeItem(ONBOARDING_STEP_KEY)
+}
+
+export function shouldShowOnboarding(data: ClaimData, force = false) {
+  if (force) return true
+  if (typeof window === 'undefined') return false
+  if (localStorage.getItem(ONBOARDING_COMPLETE_KEY) === 'true') return false
+  if (localStorage.getItem(ONBOARDING_STEP_KEY)) return true
+  return !hasExistingClaimData(data)
 }
 
 export function toggleFollowUpTask(data: ClaimData, taskId: string) {
@@ -1040,6 +1303,90 @@ export function autoImportPhotosToAIBuilder(data: ClaimData) {
     analysisMode: data.aiAnalysisMode || 'ITEM_VIEW',
     source: 'auto-import',
   }))
+}
+
+function matchPhotoToAI(data: ClaimData, photo: FileItem | AIPhoto, roomName: string) {
+  const directId = String((photo as { id?: string | number }).id || '')
+  const directPath = String(photo.path || '')
+  const directName = String(photo.name || photo.filename || '')
+  const aiPhoto = (data.aiPhotos || []).find((entry) => {
+    const sameId = directId && String(entry.id || '') === directId
+    const samePath = directPath && String(entry.path || '') === directPath
+    const sameUrl = photo.url && entry.url && String(entry.url) === String(photo.url)
+    const sameName = directName && String(entry.name || entry.filename || '') === directName && String(entry.roomName || '') === roomName
+    return sameId || samePath || sameUrl || sameName
+  })
+  if (!aiPhoto) return { aiResultId: null, aiItemCount: 0, analysisMode: '' as const }
+  const aiResult = (data.aiResults || []).find((result) => String(result.photoId || '') === String(aiPhoto.id || ''))
+  return {
+    aiResultId: aiResult ? String(aiResult.id || '') : null,
+    aiItemCount: (aiResult?.detectedItems || []).length,
+    analysisMode: normalizeAnalysisMode(aiPhoto.analysisMode || '', 'ITEM_VIEW'),
+  }
+}
+
+export function buildPhotoLibraryEntries(data: ClaimData): PhotoLibraryEntry[] {
+  const roomMap = new Map(data.rooms.map((room) => [String(room.id), room]))
+  const entries: PhotoLibraryEntry[] = []
+
+  ;(data.photoLibrary || []).forEach((photo, index) => {
+    const room = photo.roomId ? roomMap.get(String(photo.roomId)) : undefined
+    const roomName = String((photo as { roomName?: string }).roomName || room?.name || 'Unassigned')
+    const ai = matchPhotoToAI(data, photo, roomName)
+    entries.push({
+      id: `library-${String(photo.id || index)}`,
+      sourceType: 'library',
+      photo,
+      roomId: room ? String(room.id) : (photo.roomId ? String(photo.roomId) : null),
+      roomName,
+      name: String(photo.name || photo.filename || 'Photo'),
+      previewUrl: String(photo.thumbUrl || photo.url || photo.dataUrl || photo.data || ''),
+      uploadedAt: String(photo.uploadedAt || photo.timestamp || photo.createdAt || ''),
+      analysisMode: ai.analysisMode,
+      aiResultId: ai.aiResultId,
+      aiItemCount: ai.aiItemCount,
+    })
+  })
+
+  ;(data.rooms || []).forEach((room) => {
+    ;(room.photos || []).forEach((photo, index) => {
+      const ai = matchPhotoToAI(data, photo, String(room.name || 'Unassigned'))
+      entries.push({
+        id: `room-${room.id}-${String(photo.id || index)}`,
+        sourceType: 'room',
+        photo,
+        roomId: String(room.id),
+        roomName: String(room.name || 'Unassigned'),
+        name: String(photo.name || photo.filename || `${room.name || 'Room'} photo`),
+        previewUrl: String(photo.thumbUrl || photo.url || photo.dataUrl || photo.data || ''),
+        uploadedAt: String(photo.uploadedAt || photo.timestamp || photo.createdAt || ''),
+        analysisMode: ai.analysisMode,
+        aiResultId: ai.aiResultId,
+        aiItemCount: ai.aiItemCount,
+      })
+    })
+  })
+
+  ;(data.aiPhotos || []).forEach((photo, index) => {
+    const ai = matchPhotoToAI(data, photo, String(photo.roomName || 'Unassigned'))
+    entries.push({
+      id: `ai-${String(photo.id || index)}`,
+      sourceType: 'ai',
+      photo,
+      roomId: photo.roomId ? String(photo.roomId) : null,
+      roomName: String(photo.roomName || 'Unassigned'),
+      name: String(photo.name || photo.filename || 'AI Photo'),
+      previewUrl: String(photo.thumbUrl || photo.url || photo.dataUrl || photo.data || ''),
+      uploadedAt: String(photo.uploadedAt || photo.timestamp || photo.createdAt || ''),
+      analysisMode: photo.analysisMode || ai.analysisMode,
+      aiResultId: ai.aiResultId,
+      aiItemCount: ai.aiItemCount,
+    })
+  })
+
+  return entries
+    .filter((entry) => entry.previewUrl)
+    .sort((left, right) => new Date(right.uploadedAt || 0).getTime() - new Date(left.uploadedAt || 0).getTime())
 }
 
 export function normalizeReceiptItem(raw: Record<string, unknown> | ReceiptLineItem): ReceiptLineItem {

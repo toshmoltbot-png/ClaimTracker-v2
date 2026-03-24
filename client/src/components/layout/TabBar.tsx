@@ -1,6 +1,7 @@
 import type { ClaimTabId } from '@/types/claim'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
+import { getStoredOnboardingStep } from '@/lib/claimWorkflow'
 
 const tabs: Array<{ id: Exclude<ClaimTabId, 'maximizer'>; label: string; badge?: (counts: Record<string, number>) => number }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -25,7 +26,7 @@ interface TabBarProps {
 
 export function TabBar({ activeTab, onTabChange }: TabBarProps) {
   const data = useClaimStore((state) => state.data)
-  const setWizardOpen = useUIStore((state) => state.setWizardOpen)
+  const openWizard = useUIStore((state) => state.openWizard)
   const counts = {
     rooms: data.rooms.length,
     photoLibrary: data.photoLibrary.length,
@@ -61,8 +62,8 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
             </button>
           )
         })}
-        <button className="button-secondary ml-auto whitespace-nowrap" onClick={() => setWizardOpen(true)} type="button">
-          Open Wizard
+        <button className="button-secondary ml-auto whitespace-nowrap" onClick={() => openWizard(getStoredOnboardingStep())} type="button">
+          ⟲ Wizard
         </button>
       </div>
     </nav>

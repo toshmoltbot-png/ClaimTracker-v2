@@ -10,6 +10,7 @@ interface ToastMessage {
 interface WizardState {
   open: boolean
   step: number
+  forced: boolean
 }
 
 interface UIState {
@@ -26,6 +27,7 @@ interface UIState {
   dismissToast: (id: string) => void
   setWizardOpen: (open: boolean) => void
   setWizardStep: (step: number) => void
+  openWizard: (step?: number, forced?: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -33,7 +35,7 @@ export const useUIStore = create<UIState>((set) => ({
   saveStatus: 'offline',
   modals: {},
   toasts: [],
-  wizard: { open: false, step: 1 },
+  wizard: { open: false, step: 1, forced: false },
   setActiveTab: (activeTab) => set({ activeTab }),
   setSaveStatus: (saveStatus) => set({ saveStatus }),
   openModal: (id) => set((state) => ({ modals: { ...state.modals, [id]: true } })),
@@ -45,4 +47,13 @@ export const useUIStore = create<UIState>((set) => ({
   dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) })),
   setWizardOpen: (open) => set((state) => ({ wizard: { ...state.wizard, open } })),
   setWizardStep: (step) => set((state) => ({ wizard: { ...state.wizard, step } })),
+  openWizard: (step, forced = false) =>
+    set((state) => ({
+      wizard: {
+        ...state.wizard,
+        open: true,
+        step: step ?? state.wizard.step,
+        forced,
+      },
+    })),
 }))

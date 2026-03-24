@@ -68,6 +68,10 @@ export interface Room extends DynamicFields {
   sqft?: number | string
   notes?: string
   photos?: FileItem[]
+  floorPlanX?: number | null
+  floorPlanY?: number | null
+  floorPlanRotation?: number | null
+  floorPlanVisible?: boolean
 }
 
 export interface EvidencePhoto extends DynamicFields {
@@ -300,6 +304,11 @@ export interface TimelineEvent extends DynamicFields {
 export interface FloorPlan extends DynamicFields {
   id?: string
   rooms?: Array<Record<string, unknown>>
+  snapEnabled?: boolean
+  showConnections?: boolean
+  showLabels?: boolean
+  showDimensions?: boolean
+  scale?: number
 }
 
 export interface PolicyDoc extends FileItem {
@@ -336,6 +345,7 @@ export interface PolicyInsights extends DynamicFields {
 export interface OnboardingState extends DynamicFields {
   wizardPolicyUploaded: boolean
   wizardPolicyFilename: string
+  wizardDismissedAt?: string | null
 }
 
 export interface ClaimData extends DynamicFields {
