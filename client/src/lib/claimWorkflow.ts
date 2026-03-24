@@ -915,13 +915,21 @@ export function updateDashboardSummary(data: ClaimData): DashboardSummary {
 }
 
 export function buildReadinessChecks(data: ClaimData): ReadinessCheck[] {
-  const summary = updateDashboardSummary({ ...data, contents: data.contents || [] })
+  // Inline the counts to avoid mutual recursion with updateDashboardSummary
+  const contents = (data.contents || []).filter((item) => item.source !== 'receipt' && item.includedInClaim !== false)
+  const enrichedCount = contents.filter((item) => Boolean(item.enrichment?.revised || item.enriched)).length
+  const photoCount =
+    (data.aiPhotos || []).length
+    + (data.photoLibrary || []).length
+    + (data.rooms || []).reduce((sum, room) => sum + (room.photos || []).length, 0)
+    + contents.reduce((sum, item) => sum + countItemPhotos(item), 0)
+
   const hasPolicy = (data.policyDocs || []).length > 0 || Boolean(data.dashboard.policyNumber || data.claim.policyNumber)
-  const hasPhotos = summary.photoCount > 0
-  const hasItems = summary.itemCount > 0
-  const hasRooms = summary.roomsCount > 0
-  const hasExpenses = summary.expensesTotal > 0
-  const enrichedReady = summary.itemCount > 0 && summary.enrichedCount > 0
+  const hasPhotos = photoCount > 0
+  const hasItems = contents.length > 0
+  const hasRooms = (data.rooms || []).length > 0
+  const hasExpenses = getExpensesTotal(data.expenses) > 0
+  const enrichedReady = contents.length > 0 && enrichedCount > 0
 
   return [
     { key: 'policy', label: 'Policy details captured', description: 'Claim number, policy number, and carrier basics are filled in.', complete: hasPolicy },
