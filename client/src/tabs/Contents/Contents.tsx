@@ -51,6 +51,41 @@ function compareItems(a: ContentItemType, b: ContentItemType, sort: string) {
   }
 }
 
+function MobileContentCard({ item, selected, onSelect, onEdit, onDelete, onEnrich }: {
+  item: ContentItemType
+  selected: boolean
+  onSelect: (checked: boolean) => void
+  onEdit: () => void
+  onDelete: () => void
+  onEnrich: () => void
+}) {
+  const disposition = normalizeDisposition(item.disposition) || 'open'
+  const isEnriched = Boolean(item.enrichment?.revised || item.enriched)
+
+  return (
+    <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 p-4">
+      <div className="flex items-start gap-3">
+        <input checked={selected} className="mt-1" onChange={(e) => onSelect(e.target.checked)} type="checkbox" />
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-white truncate">{item.itemName || 'Unnamed item'}</p>
+          <p className="mt-1 text-xs text-slate-400">{item.room || item.location || 'Unassigned'} · {item.category || 'Other'}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-white">{formatCurrency(getItemTotalValue(item))}</span>
+            <span className="rounded-full bg-slate-900/80 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-200">{disposition}</span>
+            {isEnriched ? <span className="rounded-full bg-sky-400/15 px-2 py-0.5 text-[11px] font-semibold text-sky-200">Enriched</span> : null}
+            {item.contaminated ? <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-200">Contaminated</span> : null}
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button className="button-secondary flex-1 py-2 text-xs" onClick={onEnrich} type="button">{isEnriched ? 'Re-Enrich' : 'Enrich'}</button>
+        <button className="button-secondary flex-1 py-2 text-xs" onClick={onEdit} type="button">Edit</button>
+        <button className="button-secondary py-2 px-3 text-xs" onClick={onDelete} type="button">✕</button>
+      </div>
+    </div>
+  )
+}
+
 function isCardboardItem(item: ContentItemType) {
   const text = `${item.itemName || ''} ${item.category || ''}`.toLowerCase()
   return /cardboard|box|boxes|carton/.test(text)
@@ -67,6 +102,8 @@ export function Contents() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ContentItemType | null>(null)
   const [enrichTargetId, setEnrichTargetId] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 100
 
   const allItems = useMemo(() => (data.contents || []).filter((item) => item.source !== 'receipt'), [data.contents])
   const includedItems = useMemo(() => allItems.filter((item) => item.includedInClaim !== false), [allItems])
@@ -87,6 +124,12 @@ export function Contents() {
   const enrichTarget = useMemo(() => allItems.find((item) => item.id === enrichTargetId) || null, [allItems, enrichTargetId])
   const totalValue = useMemo(() => includedItems.reduce((sum, item) => sum + getItemTotalValue(item), 0), [includedItems])
   const enrichedCount = useMemo(() => includedItems.filter((item) => item.enrichment?.revised || item.enriched).length, [includedItems])
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
+  const paginatedItems = useMemo(() => {
+    if (filteredItems.length <= PAGE_SIZE) return filteredItems
+    const start = page * PAGE_SIZE
+    return filteredItems.slice(start, start + PAGE_SIZE)
+  }, [filteredItems, page])
 
   function patchItems(transform: (item: ContentItemType) => ContentItemType) {
     updateData((current) => ({
@@ -213,7 +256,7 @@ export function Contents() {
       <section className="panel px-5 py-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-1 flex-col gap-4 sm:flex-row">
-            <input className="field" onChange={(event) => setSearch(event.target.value)} placeholder="Search name, room, category, or rationale" value={search} />
+            <input className="field" onChange={(event) => { setSearch(event.target.value); setPage(0) }} placeholder="Search name, room, category, or rationale" value={search} />
             <select className="field max-w-56" onChange={(event) => setSort(event.target.value)} value={sort}>
               {SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -225,7 +268,29 @@ export function Contents() {
           <p className="text-sm text-slate-400">{filteredItems.length} visible row{filteredItems.length === 1 ? '' : 's'}</p>
         </div>
 
-        <div className="mt-5 overflow-x-auto">
+        {/* Mobile card view */}
+        <div className="mt-5 space-y-3 md:hidden">
+          {paginatedItems.length ? (
+            paginatedItems.map((item) => (
+              <MobileContentCard
+                item={item}
+                key={item.id}
+                onDelete={() => setDeleteTarget(item)}
+                onEdit={() => { setEditingItem(item); setIsModalOpen(true) }}
+                onEnrich={() => setEnrichTargetId(item.id)}
+                onSelect={(checked) =>
+                  setSelectedIds((current) => (checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id)))
+                }
+                selected={selectedSet.has(item.id)}
+              />
+            ))
+          ) : (
+            <div className="py-10 text-center text-sm text-slate-400">No contents items match the current search.</div>
+          )}
+        </div>
+
+        {/* Desktop table view */}
+        <div className="mt-5 hidden overflow-x-auto md:block">
           <table className="min-w-full border-separate border-spacing-0">
             <thead>
               <tr className="text-left text-xs uppercase tracking-[0.2em] text-slate-400">
@@ -242,8 +307,8 @@ export function Contents() {
               </tr>
             </thead>
             <tbody>
-              {filteredItems.length ? (
-                filteredItems.map((item) => (
+              {paginatedItems.length ? (
+                paginatedItems.map((item) => (
                   <ContentItem
                     item={item}
                     key={item.id}
@@ -269,6 +334,21 @@ export function Contents() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination for large lists */}
+        {totalPages > 1 ? (
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <button className="button-secondary px-3 py-1.5 text-xs" disabled={page === 0} onClick={() => setPage((p) => p - 1)} type="button">
+              ← Previous
+            </button>
+            <span className="text-sm text-slate-400">
+              Page {page + 1} of {totalPages}
+            </span>
+            <button className="button-secondary px-3 py-1.5 text-xs" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)} type="button">
+              Next →
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <ContentModal

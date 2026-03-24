@@ -3,6 +3,17 @@ services:
     name: claimtracker-v2
     env: node
     rootDir: .
-    buildCommand: cd client && npm install && npm run build
-    startCommand: node server/server.js
+    buildCommand: cd client && npm ci && npm run build && cd ../server && npm ci
+    startCommand: cd server && node server.js
     autoDeploy: true
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: EBAY_CLIENT_ID
+        sync: false
+      - key: EBAY_CLIENT_SECRET
+        sync: false
+      - key: NODE_ENV
+        value: production

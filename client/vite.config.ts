@@ -3,12 +3,16 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: mode === 'development',
   },
   server: {
     proxy: {
@@ -18,4 +22,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

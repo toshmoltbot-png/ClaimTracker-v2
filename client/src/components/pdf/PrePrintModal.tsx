@@ -7,8 +7,7 @@ import { useUIStore } from '@/store/uiStore'
 import type { ClaimData, ClaimTabId } from '@/types/claim'
 import { generateClaimPDF } from '@/components/pdf/PDFGenerator'
 
-const PREMIUM_STORAGE_KEY = 'claimtracker:premium-unlocked'
-const PREMIUM_ENABLED = false
+import { PREMIUM_ENABLED } from '@/store/uiStore'
 
 interface PPMItem {
   id: string
@@ -23,13 +22,7 @@ interface PPMCard {
   items: PPMItem[]
 }
 
-function isPremiumUnlocked() {
-  return typeof window !== 'undefined' && window.localStorage.getItem(PREMIUM_STORAGE_KEY) === 'true'
-}
 
-function setPremiumUnlocked(value: boolean) {
-  window.localStorage.setItem(PREMIUM_STORAGE_KEY, value ? 'true' : 'false')
-}
 
 function getPPMSummary(data: ClaimData) {
   const rooms = data.rooms || []
@@ -142,7 +135,9 @@ export function PrePrintModal() {
   const data = useClaimStore((state) => state.data)
   const navigate = useNavigate()
   const [generating, setGenerating] = useState(false)
-  const [unlocked, setUnlocked] = useState(isPremiumUnlocked())
+  const premiumUnlocked = useUIStore((state) => state.premiumUnlocked)
+  const setPremiumUnlocked = useUIStore((state) => state.setPremiumUnlocked)
+  const unlocked = premiumUnlocked
 
   const summary = useMemo(() => getPPMSummary(data), [data])
   const dollarEstimate = useMemo(() => calcPPMDollarEstimate(summary), [summary])
@@ -160,7 +155,6 @@ export function PrePrintModal() {
       return
     }
     setPremiumUnlocked(true)
-    setUnlocked(true)
     pushToast('Guidance unlocked. Free during beta.', 'success')
   }
 

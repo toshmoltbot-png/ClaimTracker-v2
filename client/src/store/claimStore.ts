@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { loadClaimWithRetry, mergeData, persistCloud, persistLocal } from '@/lib/persistence'
+import { loadClaimWithRetry, loadLocalClaim, mergeData, persistCloud, persistLocal } from '@/lib/persistence'
+import { sanitizeClaimData } from '@/lib/sanitizer'
 import { createDefaultClaimData, type ClaimData, type SaveStatus } from '@/types/claim'
 import { useUIStore } from '@/store/uiStore'
 
@@ -33,30 +34,60 @@ export const useClaimStore = create<ClaimState>((set) => ({
     set({ loadStatus: 'loading' })
     try {
       const cloud = await loadClaimWithRetry()
+      // Sanitizer runs on every Firestore load — normalizes dispositions, validates Cat3 rules
+      const sanitized = cloud ? sanitizeClaimData(cloud) : createDefaultClaimData()
       set({
-        data: cloud ?? createDefaultClaimData(),
+        data: sanitized,
         hydrated: true,
         dirty: false,
         loadStatus: 'loaded',
       })
       useUIStore.getState().setSaveStatus(cloud ? 'saved' : 'offline')
     } catch {
-      set({ hydrated: true, loadStatus: 'error' })
+      // Fall back to local cache when cloud fails
+      const local = loadLocalClaim()
+      const sanitized = sanitizeClaimData(local)
+      set({ data: sanitized, hydrated: true, loadStatus: 'error' })
       useUIStore.getState().setSaveStatus('error')
+      useUIStore.getState().setOffline(true)
+      useUIStore.getState().pushToast('Cloud load failed — working from local cache.', 'warning')
     }
   },
 }))
 
 async function runAutosave(data: ClaimData) {
-  useUIStore.getState().setSaveStatus('saving')
+  const ui = useUIStore.getState()
+  ui.setSaveStatus('saving')
   persistLocal(data)
   const status: SaveStatus = await persistCloud(data)
-  useUIStore.getState().setSaveStatus(status)
+  ui.setSaveStatus(status)
+  if (status === 'error') {
+    ui.setOffline(true)
+    ui.pushToast('Cloud save failed — changes saved locally. Will retry.', 'warning')
+  } else if (status === 'saved') {
+    ui.setOffline(false)
+  }
 }
 
 export function setupClaimAutosave() {
   if (autosaveStarted) return
   autosaveStarted = true
+
+  // Listen for online/offline events
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => {
+      useUIStore.getState().setOffline(false)
+      useUIStore.getState().pushToast('Back online — syncing changes.', 'info')
+      // Trigger a save of current data
+      const state = useClaimStore.getState()
+      if (state.hydrated) void runAutosave(state.data)
+    })
+    window.addEventListener('offline', () => {
+      useUIStore.getState().setOffline(true)
+      useUIStore.getState().pushToast('You are offline — changes saved locally.', 'warning')
+    })
+  }
+
   useClaimStore.subscribe((state, previous) => {
     if (!state.hydrated || !state.dirty || state.data === previous.data) return
     if (debounceTimer) window.clearTimeout(debounceTimer)

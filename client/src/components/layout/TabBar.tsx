@@ -39,32 +39,34 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
   }
 
   return (
-    <nav className="sticky top-4 z-20 mt-4 overflow-x-auto pb-1">
-      <div className="panel-elevated flex min-w-max items-center gap-2 px-3 py-3">
-        {tabs.map((tab) => {
-          const isActive = tab.id === activeTab
-          const badgeCount = tab.badge?.(counts)
-          return (
-            <button
-              className={
-                isActive
-                  ? 'inline-flex items-center gap-2 rounded-xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950'
-                  : 'inline-flex items-center gap-2 rounded-xl border border-transparent px-4 py-2 text-sm font-medium text-slate-300 hover:border-[color:var(--border)] hover:bg-slate-900/60 hover:text-white'
-              }
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              type="button"
-            >
-              <span>{tab.label}</span>
-              {badgeCount ? (
-                <span className="rounded-full bg-slate-950/20 px-2 py-0.5 text-[11px] font-bold">{badgeCount}</span>
-              ) : null}
-            </button>
-          )
-        })}
-        <button className="button-secondary ml-auto whitespace-nowrap" onClick={() => openWizard(getStoredOnboardingStep())} type="button">
-          ⟲ Wizard
-        </button>
+    <nav className="sticky top-4 z-20 mt-4 pb-1">
+      <div className="panel-elevated overflow-x-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-max items-center gap-1.5 px-3 py-3 sm:gap-2">
+          {tabs.map((tab) => {
+            const isActive = tab.id === activeTab
+            const badgeCount = tab.badge?.(counts)
+            return (
+              <button
+                className={
+                  isActive
+                    ? 'inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-400 px-3 py-2 text-sm font-semibold text-slate-950 sm:gap-2 sm:px-4'
+                    : 'inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-300 hover:border-[color:var(--border)] hover:bg-slate-900/60 hover:text-white sm:gap-2 sm:px-4'
+                }
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                type="button"
+              >
+                <span>{tab.label}</span>
+                {badgeCount ? (
+                  <span className="rounded-full bg-slate-950/20 px-2 py-0.5 text-[11px] font-bold">{badgeCount}</span>
+                ) : null}
+              </button>
+            )
+          })}
+          <button className="button-secondary ml-auto shrink-0 whitespace-nowrap" onClick={() => openWizard(getStoredOnboardingStep())} type="button">
+            ⟲ Wizard
+          </button>
+        </div>
       </div>
     </nav>
   )

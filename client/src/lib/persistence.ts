@@ -156,10 +156,26 @@ export async function persistCloud(data: ClaimData, retryCount = 0): Promise<Sav
     return 'saved'
   } catch (error) {
     persistLocal(data)
-    if (isNetworkError(error) && retryCount < 1) {
-      await new Promise((resolve) => window.setTimeout(resolve, 2000))
+    if (isNetworkError(error) && retryCount < 2) {
+      const delay = 2000 * (retryCount + 1)
+      await new Promise((resolve) => window.setTimeout(resolve, delay))
       return persistCloud(data, retryCount + 1)
     }
+    if (isQuotaError(error)) {
+      console.warn('[persistence] Storage quota exceeded')
+    }
     return 'error'
+  }
+}
+
+export function checkStorageQuota(): { used: number; available: boolean } {
+  try {
+    const test = 'x'.repeat(1024)
+    localStorage.setItem('__quota_test__', test)
+    localStorage.removeItem('__quota_test__')
+    const used = new Blob(Object.values(localStorage)).size
+    return { used, available: true }
+  } catch {
+    return { used: 0, available: false }
   }
 }

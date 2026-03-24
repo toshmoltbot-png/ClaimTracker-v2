@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactElement } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, type ComponentType } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Header } from '@/components/layout/Header'
 import { TabBar } from '@/components/layout/TabBar'
@@ -11,37 +11,50 @@ import { PDFProgress } from '@/components/pdf/PDFProgress'
 import { useClaimStore, setupClaimAutosave } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import { CLAIM_TABS, type ClaimTabId } from '@/types/claim'
-import { Dashboard } from '@/tabs/Dashboard/Dashboard'
-import { ClaimInfo } from '@/tabs/ClaimInfo/ClaimInfo'
-import { Rooms } from '@/tabs/Rooms/Rooms'
-import { FloorPlan } from '@/tabs/FloorPlan/FloorPlan'
-import { PhotoLibrary } from '@/tabs/PhotoLibrary/PhotoLibrary'
-import { AIBuilder } from '@/tabs/AIBuilder/AIBuilder'
-import { Contents } from '@/tabs/Contents/Contents'
-import { Receipts } from '@/tabs/Receipts/Receipts'
-import { Expenses } from '@/tabs/Expenses/Expenses'
-import { Communications } from '@/tabs/Communications/Communications'
-import { Timeline } from '@/tabs/Timeline/Timeline'
-import { Contractors } from '@/tabs/Contractors/Contractors'
-import { Payments } from '@/tabs/Payments/Payments'
-import { Maximizer } from '@/tabs/Maximizer/Maximizer'
 import { OnboardingWizard } from '@/wizard/OnboardingWizard'
 import { getStoredOnboardingStep, shouldShowOnboarding } from '@/lib/claimWorkflow'
 
-const tabComponents: Record<Exclude<ClaimTabId, 'maximizer'>, ReactElement> = {
-  dashboard: <Dashboard />,
-  'claim-info': <ClaimInfo />,
-  rooms: <Rooms />,
-  'floor-plan': <FloorPlan />,
-  'photo-library': <PhotoLibrary />,
-  'ai-builder': <AIBuilder />,
-  contents: <Contents />,
-  receipts: <Receipts />,
-  expenses: <Expenses />,
-  communications: <Communications />,
-  timeline: <Timeline />,
-  contractors: <Contractors />,
-  payments: <Payments />,
+// Lazy-loaded tab components for code splitting
+const Dashboard = lazy(() => import('@/tabs/Dashboard/Dashboard').then((m) => ({ default: m.Dashboard })))
+const ClaimInfo = lazy(() => import('@/tabs/ClaimInfo/ClaimInfo').then((m) => ({ default: m.ClaimInfo })))
+const Rooms = lazy(() => import('@/tabs/Rooms/Rooms').then((m) => ({ default: m.Rooms })))
+const FloorPlan = lazy(() => import('@/tabs/FloorPlan/FloorPlan').then((m) => ({ default: m.FloorPlan })))
+const PhotoLibrary = lazy(() => import('@/tabs/PhotoLibrary/PhotoLibrary').then((m) => ({ default: m.PhotoLibrary })))
+const AIBuilder = lazy(() => import('@/tabs/AIBuilder/AIBuilder').then((m) => ({ default: m.AIBuilder })))
+const Contents = lazy(() => import('@/tabs/Contents/Contents').then((m) => ({ default: m.Contents })))
+const Receipts = lazy(() => import('@/tabs/Receipts/Receipts').then((m) => ({ default: m.Receipts })))
+const Expenses = lazy(() => import('@/tabs/Expenses/Expenses').then((m) => ({ default: m.Expenses })))
+const Communications = lazy(() => import('@/tabs/Communications/Communications').then((m) => ({ default: m.Communications })))
+const Timeline = lazy(() => import('@/tabs/Timeline/Timeline').then((m) => ({ default: m.Timeline })))
+const Contractors = lazy(() => import('@/tabs/Contractors/Contractors').then((m) => ({ default: m.Contractors })))
+const Payments = lazy(() => import('@/tabs/Payments/Payments').then((m) => ({ default: m.Payments })))
+const Maximizer = lazy(() => import('@/tabs/Maximizer/Maximizer').then((m) => ({ default: m.Maximizer })))
+
+const tabComponents: Record<Exclude<ClaimTabId, 'maximizer'>, ComponentType> = {
+  dashboard: Dashboard,
+  'claim-info': ClaimInfo,
+  rooms: Rooms,
+  'floor-plan': FloorPlan,
+  'photo-library': PhotoLibrary,
+  'ai-builder': AIBuilder,
+  contents: Contents,
+  receipts: Receipts,
+  expenses: Expenses,
+  communications: Communications,
+  timeline: Timeline,
+  contractors: Contractors,
+  payments: Payments,
+}
+
+function TabSuspenseFallback() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
+        <p className="text-sm text-slate-400">Loading…</p>
+      </div>
+    </div>
+  )
 }
 
 function MainShell() {
@@ -80,7 +93,7 @@ function MainShell() {
     return CLAIM_TABS.includes(activeTab) && activeTab !== 'maximizer' ? activeTab : 'dashboard'
   }, [activeTab])
 
-  const renderTab = tabComponents[currentTab]
+  const TabComponent = tabComponents[currentTab]
 
   return (
     <AuthGuard>
@@ -94,7 +107,11 @@ function MainShell() {
               navigate(`/#${tab}`)
             }}
           />
-          <main className="flex-1 py-6">{renderTab}</main>
+          <main className="flex-1 py-6 pb-24 md:pb-6">
+            <Suspense fallback={<TabSuspenseFallback />}>
+              <TabComponent />
+            </Suspense>
+          </main>
           <MobileQuickActions />
         </div>
         <OnboardingWizard />
@@ -116,7 +133,9 @@ export default function App() {
         element={
           <AuthGuard>
             <div className="mx-auto min-h-screen max-w-6xl px-4 py-6 sm:px-6">
-              <Maximizer />
+              <Suspense fallback={<TabSuspenseFallback />}>
+                <Maximizer />
+              </Suspense>
               <ToastViewport />
             </div>
           </AuthGuard>

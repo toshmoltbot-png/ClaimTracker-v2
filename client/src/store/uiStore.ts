@@ -13,14 +13,20 @@ interface WizardState {
   forced: boolean
 }
 
+const PREMIUM_STORAGE_KEY = 'claimtracker:premium-unlocked'
+export const PREMIUM_ENABLED = false
+
 interface UIState {
   activeTab: ClaimTabId
   saveStatus: SaveStatus
+  isOffline: boolean
+  premiumUnlocked: boolean
   modals: Record<string, boolean>
   toasts: ToastMessage[]
   wizard: WizardState
   setActiveTab: (tab: ClaimTabId) => void
   setSaveStatus: (status: SaveStatus) => void
+  setOffline: (offline: boolean) => void
   openModal: (id: string) => void
   closeModal: (id: string) => void
   pushToast: (title: string, type?: ToastType) => void
@@ -28,16 +34,29 @@ interface UIState {
   setWizardOpen: (open: boolean) => void
   setWizardStep: (step: number) => void
   openWizard: (step?: number, forced?: boolean) => void
+  isPremiumUnlocked: () => boolean
+  setPremiumUnlocked: (value: boolean) => void
 }
 
-export const useUIStore = create<UIState>((set) => ({
+function readPremiumFromStorage(): boolean {
+  try {
+    return typeof window !== 'undefined' && window.localStorage.getItem(PREMIUM_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export const useUIStore = create<UIState>((set, get) => ({
   activeTab: 'dashboard',
   saveStatus: 'offline',
+  isOffline: typeof navigator !== 'undefined' ? !navigator.onLine : false,
+  premiumUnlocked: readPremiumFromStorage(),
   modals: {},
   toasts: [],
   wizard: { open: false, step: 1, forced: false },
   setActiveTab: (activeTab) => set({ activeTab }),
   setSaveStatus: (saveStatus) => set({ saveStatus }),
+  setOffline: (isOffline) => set({ isOffline }),
   openModal: (id) => set((state) => ({ modals: { ...state.modals, [id]: true } })),
   closeModal: (id) => set((state) => ({ modals: { ...state.modals, [id]: false } })),
   pushToast: (title, type = 'info') =>
@@ -56,4 +75,11 @@ export const useUIStore = create<UIState>((set) => ({
         forced,
       },
     })),
+  isPremiumUnlocked: () => get().premiumUnlocked,
+  setPremiumUnlocked: (value) => {
+    try {
+      window.localStorage.setItem(PREMIUM_STORAGE_KEY, value ? 'true' : 'false')
+    } catch { /* quota exceeded */ }
+    set({ premiumUnlocked: value })
+  },
 }))
