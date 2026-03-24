@@ -62,13 +62,15 @@ export function stripUndefined<T>(value: T): T {
 
 export async function loadClaim(uid = getUid()): Promise<ClaimData | null> {
   if (!uid) return null
-  const snapshot = await getDoc(doc(db, 'claims', uid))
+  // Match v1 Firestore path: users/{uid}/claims/default
+  const snapshot = await getDoc(doc(db, 'users', uid, 'claims', 'default'))
   return snapshot.exists() ? (snapshot.data() as ClaimData) : null
 }
 
 export async function saveClaim(claim: ClaimData, uid = getUid()) {
   if (!uid) throw new Error('auth/unauthenticated')
-  await setDoc(doc(db, 'claims', uid), stripUndefined(claim), { merge: true })
+  // Match v1 Firestore path: users/{uid}/claims/default
+  await setDoc(doc(db, 'users', uid, 'claims', 'default'), stripUndefined(claim), { merge: true })
 }
 
 function makeStoragePath(filename: string, folder: string) {
