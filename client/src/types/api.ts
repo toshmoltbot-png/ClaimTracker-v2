@@ -103,3 +103,28 @@ export interface MaximizerMetricsRequest {
   event: string
   [key: string]: unknown
 }
+
+export interface AnalyzeContractorReportRequest {
+  text?: string
+  fileName?: string
+  mimeType?: string
+  documentUrl?: string
+  [key: string]: unknown
+}
+
+export interface AnalyzeContractorReportResponse {
+  structuredFindings?: string[]
+  findings?: string[]
+  recommendations?: string[]
+  companyName?: string
+  contactName?: string
+  trade?: string
+  damageCategory?: string
+  workDescription?: string
+  serviceStartDate?: string
+  serviceEndDate?: string
+  totalAmount?: number
+  affectedRooms?: string[]
+  keyLineItems?: string[]
+  [key: string]: unknown
+}

@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable'
 import { apiClient } from '@/lib/api'
 import { fmtUSDate } from '@/lib/dates'
 import { applyCategory3Rules } from '@/lib/sanitizer'
-import { dataUrlToBase64 } from '@/lib/utils'
+import { dataUrlToBase64, upsertById } from '@/lib/utils'
 import type {
   AIDetectedItem,
   AIPhoto,
@@ -11,14 +11,20 @@ import type {
   AnalysisMode,
   ClaimData,
   ClaimType,
+  Communication,
   ContentItem,
+  Contractor,
+  ContractorReport,
   DashboardData,
+  ExpenseEntry,
   Expenses,
+  Payment,
   PolicyDoc,
   QuantityUnit,
   Receipt,
   ReceiptLineItem,
   Room,
+  TimelineEvent,
 } from '@/types/claim'
 import type { EnrichItemResponse } from '@/types/api'
 
@@ -69,6 +75,22 @@ export const QUANTITY_UNITS: QuantityUnit[] = ['each', 'pair', 'set', 'box']
 export const DISPOSITION_OPTIONS = ['discarded', 'inspected'] as const
 export const POLICY_DOC_TYPES = ['declarations', 'fullpolicy', 'endorsements', 'correspondence', 'other'] as const
 export const RECEIPT_CATEGORIES = ['cleanup_supplies', 'protective_equipment', 'tools', 'replacement', 'other'] as const
+export const EXPENSE_CATEGORY_OPTIONS = [
+  'Lodging',
+  'Food',
+  'Transportation',
+  'Utilities',
+  'Storage',
+  'Laundry',
+  'Pet Care',
+  'Cleanup Labor',
+  'Disposal',
+  'Other',
+] as const
+export const COMMUNICATION_TYPE_OPTIONS = ['phone', 'email', 'in-person', 'letter'] as const
+export const COMMUNICATION_PARTY_OPTIONS = ['adjuster', 'contractor', 'attorney', 'agent', 'insurer', 'landlord', 'other'] as const
+export const PAYMENT_TYPE_OPTIONS = ['advance', 'partial', 'final', 'supplement'] as const
+export const TIMELINE_CATEGORY_OPTIONS = ['Incident', 'Insurance', 'Remediation', 'Repair', 'Legal', 'Other'] as const
 const ANALYZE_RETRYABLE_STATUS = new Set([429, 502, 503, 504])
 
 export interface DashboardSummary {
@@ -178,6 +200,106 @@ function totalExpenseEntries(entries: Array<{ amount?: number }> = []) {
   return (entries || []).reduce((sum, entry) => sum + parseNumber(entry.amount), 0)
 }
 
+export function calcExpenseDays(start: string | null | undefined, end: string | null | undefined) {
+  if (!start || !end) return 0
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return 0
+  const diff = Math.floor((endDate.getTime() - startDate.getTime()) / 86400000) + 1
+  return diff > 0 ? diff : 0
+}
+
+export function updateExpenseLineTotal(entry: ExpenseEntry) {
+  const category = String(entry.category || '').toLowerCase()
+  const nextLineItems = Array.isArray(entry.lineItems)
+    ? entry.lineItems.map((line, index) => ({
+        id: line.id || `line-${index + 1}`,
+        description: String(line.description || ''),
+        amount: Number(parseMoneyValue(line.amount).toFixed(2)),
+      }))
+    : []
+  const lineItemsTotal = nextLineItems.reduce((sum, line) => sum + parseMoneyValue(line.amount), 0)
+  const totalDays = entry.totalDays || calcExpenseDays(entry.dateStart, entry.dateEnd)
+  let amount = parseMoneyValue(entry.amount)
+
+  if (category === 'utilities') {
+    amount = parseMoneyValue(entry.dailyCostIncrease) * totalDays
+  } else if (category === 'lodging' || category === 'food' || category === 'transportation' || category === 'storage' || category === 'laundry' || category === 'pet care') {
+    amount = lineItemsTotal > 0 ? lineItemsTotal : parseMoneyValue(entry.dailyCost) * totalDays || amount
+  } else if (category === 'cleanup labor') {
+    amount = parseMoneyValue(entry.hours) * parseMoneyValue(entry.hourlyRate)
+  } else if (lineItemsTotal > 0) {
+    amount = lineItemsTotal
+  }
+
+  return {
+    ...entry,
+    totalDays: totalDays || undefined,
+    lineItems: nextLineItems,
+    amount: Number(amount.toFixed(2)),
+  }
+}
+
+function getExpenseBucket(category: string | null | undefined) {
+  const normalized = String(category || 'Other').trim().toLowerCase()
+  if (normalized === 'utilities') return 'utilityEntries'
+  if (normalized === 'cleanup labor') return 'laborEntries'
+  if (normalized === 'disposal') return 'disposalEntries'
+  if (['lodging', 'food', 'transportation', 'storage', 'laundry', 'pet care'].includes(normalized)) return 'livingEntries'
+  return 'miscEntries'
+}
+
+export function createExpenseEntryDraft(category = 'Lodging'): ExpenseEntry {
+  const normalized = category || 'Lodging'
+  const isDatedRange = normalized === 'Utilities' || ['Lodging', 'Food', 'Transportation', 'Storage', 'Laundry', 'Pet Care'].includes(normalized)
+  return updateExpenseLineTotal({
+    id: crypto.randomUUID(),
+    category: normalized,
+    vendor: '',
+    description: '',
+    date: '',
+    dateStart: isDatedRange ? '' : undefined,
+    dateEnd: isDatedRange ? '' : undefined,
+    dailyCost: 0,
+    dailyCostIncrease: 0,
+    totalDays: 0,
+    amount: 0,
+    utilityType: normalized === 'Utilities' ? 'Heat' : '',
+    lineItems: [{ id: crypto.randomUUID(), description: '', amount: 0 }],
+  })
+}
+
+export function getExpenseEntriesByCategory(expenses: Expenses) {
+  const groups = [
+    ...((expenses.laborEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Cleanup Labor' }))),
+    ...((expenses.utilityEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Utilities' }))),
+    ...((expenses.disposalEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Disposal' }))),
+    ...((expenses.livingEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Lodging' }))),
+    ...((expenses.miscEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Other' }))),
+  ].map((entry) => updateExpenseLineTotal(entry))
+
+  return groups.sort((left, right) => {
+    const leftDate = new Date(left.dateStart || left.date || 0).getTime()
+    const rightDate = new Date(right.dateStart || right.date || 0).getTime()
+    return rightDate - leftDate
+  })
+}
+
+export function getExpenseCategoryBreakdown(expenses: Expenses) {
+  return getExpenseEntriesByCategory(expenses).reduce<Record<string, number>>((totals, entry) => {
+    const key = String(entry.category || 'Other')
+    totals[key] = Number(((totals[key] || 0) + parseMoneyValue(entry.amount)).toFixed(2))
+    return totals
+  }, {})
+}
+
+export function updateExpenseBuffer(expenses: Expenses, enabled: boolean) {
+  return {
+    ...expenses,
+    bufferEnabled: enabled,
+  }
+}
+
 export function getExpensesTotal(expenses: Expenses) {
   return totalExpenseEntries(expenses.laborEntries)
     + totalExpenseEntries(expenses.utilityEntries)
@@ -203,6 +325,23 @@ export function updateContentLineTotal(item: ContentItem): ContentItem {
   return { ...item, quantity, unitPrice, total: Number((quantity * unitPrice).toFixed(2)) }
 }
 
+export function upsertExpenseEntry(expenses: Expenses, entry: ExpenseEntry): Expenses {
+  const nextEntry = updateExpenseLineTotal(entry)
+  const bucket = getExpenseBucket(nextEntry.category)
+  return {
+    ...expenses,
+    [bucket]: upsertById(expenses[bucket] || [], nextEntry),
+  }
+}
+
+export function removeExpenseEntry(expenses: Expenses, entry: ExpenseEntry): Expenses {
+  const bucket = getExpenseBucket(entry.category)
+  return {
+    ...expenses,
+    [bucket]: (expenses[bucket] || []).filter((item) => String(item.id) !== String(entry.id)),
+  }
+}
+
 export function calcRoomSqft(length: number | string | null | undefined, width: number | string | null | undefined) {
   const sqft = parseNumber(length) * parseNumber(width)
   return sqft > 0 ? Number(sqft.toFixed(2)) : 0
@@ -219,6 +358,247 @@ export function updateRoomDimensions(room: Room): Room {
     sqft: sqft || '',
     dimensions: length && width ? `${length} x ${width}` : '',
   }
+}
+
+export function toggleFollowUpTask(data: ClaimData, taskId: string) {
+  return {
+    ...data,
+    followUpTasks: (data.followUpTasks || []).map((task) => (
+      String((task as { id?: string }).id || '') === String(taskId)
+        ? {
+            ...task,
+            status: String((task as { status?: string }).status || 'open') === 'open' ? 'done' : 'open',
+          }
+        : task
+    )),
+  }
+}
+
+export function createCommunicationDraft(): Communication {
+  return {
+    id: crypto.randomUUID(),
+    date: '',
+    type: 'phone',
+    party: 'adjuster',
+    person: '',
+    summary: '',
+    followUpRequired: false,
+    followUpDate: '',
+    followUpTask: '',
+    followUp: '',
+    files: [],
+  }
+}
+
+export function normalizeCommunicationDraft(entry: Communication): Communication {
+  const person = String(entry.person || entry.contactPerson || '').trim()
+  const followUpTask = String(entry.followUpTask || '').trim()
+  const followUpDate = String(entry.followUpDate || '').trim()
+  const followUpRequired = Boolean(entry.followUpRequired || followUpTask || followUpDate)
+  return {
+    ...entry,
+    person,
+    contactPerson: person,
+    followUpTask,
+    followUpDate,
+    followUpRequired,
+    followUp: followUpRequired ? [followUpDate, followUpTask].filter(Boolean).join(' • ') : 'No',
+  }
+}
+
+export function buildCommunicationEmailDraft(data: ClaimData, communication: Communication | null | undefined) {
+  const claimNumber = data.dashboard.claimNumber || data.claim.claimNumber || '[Claim Number]'
+  const dateOfLoss = fmtUSDate(data.dashboard.dateOfLoss || data.claim.dateOfLoss) || '[Date of Loss]'
+  const insuredName = data.dashboard.insuredName || 'Policyholder'
+  const adjusterName = communication?.person || 'Adjuster'
+  const adjusterEmail = data.dashboard.adjusterEmail || ''
+  const subject = `Claim Follow-Up — Claim #${claimNumber}`
+  const body = [
+    `Dear ${adjusterName},`,
+    '',
+    `I am following up regarding Claim #${claimNumber} for the loss that occurred on ${dateOfLoss}.`,
+    communication?.summary ? `Summary of our recent ${communication.type || 'communication'}: ${communication.summary}` : '',
+    communication?.followUpRequired && (communication.followUpTask || communication.followUpDate)
+      ? `Requested follow-up: ${[communication.followUpTask, communication.followUpDate ? `by ${fmtUSDate(communication.followUpDate)}` : ''].filter(Boolean).join(' ')}.`
+      : '',
+    '',
+    'Please confirm receipt and advise on the next step when you have a moment.',
+    '',
+    `Respectfully,`,
+    insuredName,
+  ].filter(Boolean).join('\n')
+
+  return {
+    to: adjusterEmail,
+    subject,
+    body,
+  }
+}
+
+export function createContractorDraft(): Contractor {
+  return {
+    id: crypto.randomUUID(),
+    name: '',
+    company: '',
+    contact: '',
+    contactName: '',
+    phone: '',
+    email: '',
+    trade: '',
+    notes: '',
+    estimateFile: null,
+    invoiceFile: null,
+  }
+}
+
+export function normalizeContractorDraft(contractor: Contractor): Contractor {
+  const company = String(contractor.company || contractor.name || '').trim()
+  const contact = String(contractor.contact || contractor.contactName || '').trim()
+  return {
+    ...contractor,
+    company,
+    name: company,
+    contact,
+    contactName: contact,
+    trade: String(contractor.trade || '').trim(),
+    notes: String(contractor.notes || '').trim(),
+  }
+}
+
+export function createPaymentDraft(): Payment {
+  return {
+    id: crypto.randomUUID(),
+    date: '',
+    payer: '',
+    from: '',
+    amount: 0,
+    type: 'advance',
+    notes: '',
+  }
+}
+
+export function normalizePaymentDraft(payment: Payment): Payment {
+  const payer = String(payment.payer || payment.from || payment.source || '').trim()
+  return {
+    ...payment,
+    payer,
+    from: payer,
+    source: payer,
+    type: String(payment.type || 'advance'),
+    amount: Number(parseMoneyValue(payment.amount).toFixed(2)),
+    notes: String(payment.notes || payment.description || '').trim(),
+    description: String(payment.description || payment.notes || '').trim(),
+  }
+}
+
+export function getPaymentsTotal(payments: Payment[]) {
+  return payments.reduce((sum, payment) => sum + parseMoneyValue(payment.amount), 0)
+}
+
+function pushTimelineEvent(events: TimelineEvent[], event: TimelineEvent | null) {
+  if (!event?.date) return
+  const date = new Date(event.date)
+  if (Number.isNaN(date.getTime())) return
+  events.push(event)
+}
+
+export function buildTimelineEvents(data: ClaimData) {
+  const events: TimelineEvent[] = []
+
+  pushTimelineEvent(events, data.dashboard.dateOfLoss ? {
+    id: 'date-of-loss',
+    date: data.dashboard.dateOfLoss,
+    title: 'Date of Loss',
+    description: data.claim.description || data.claimType,
+    category: 'Incident',
+  } : null)
+
+  pushTimelineEvent(events, data.dashboard.dateReported ? {
+    id: 'date-reported',
+    date: data.dashboard.dateReported,
+    title: 'Claim Reported',
+    description: data.dashboard.insurerName || data.claim.insurer || '',
+    category: 'Insurance',
+  } : null)
+
+  ;(data.communications || []).forEach((entry) => {
+    pushTimelineEvent(events, entry.date ? {
+      id: String(entry.id || crypto.randomUUID()),
+      date: entry.date,
+      title: `${String(entry.party || 'Communication').replace(/\b\w/g, (match) => match.toUpperCase())} Communication`,
+      description: entry.summary || entry.person || '',
+      category: 'Insurance',
+    } : null)
+  })
+
+  ;(data.contractors || []).forEach((entry) => {
+    pushTimelineEvent(events, (entry as { startDate?: string }).startDate ? {
+      id: `${entry.id || crypto.randomUUID()}-start`,
+      date: String((entry as { startDate?: string }).startDate || ''),
+      title: `${entry.name || entry.company || 'Contractor'} Started`,
+      description: entry.trade || '',
+      category: 'Remediation',
+    } : null)
+  })
+
+  ;(data.contractorReports || []).forEach((entry) => {
+    pushTimelineEvent(events, entry.serviceStartDate ? {
+      id: `${entry.id || crypto.randomUUID()}-report`,
+      date: entry.serviceStartDate,
+      title: `${entry.companyName || entry.name || 'Contractor'} Visit`,
+      description: entry.workDescription || entry.scopeOfWork || '',
+      category: 'Repair',
+    } : null)
+  })
+
+  getExpenseEntriesByCategory(data.expenses).forEach((entry) => {
+    const date = entry.dateStart || entry.date
+    pushTimelineEvent(events, date ? {
+      id: `expense-${entry.id || crypto.randomUUID()}`,
+      date,
+      title: `${entry.category || 'Expense'} Logged`,
+      description: entry.description || entry.vendor || '',
+      category: 'Insurance',
+    } : null)
+  })
+
+  ;(data.payments || []).forEach((entry) => {
+    pushTimelineEvent(events, entry.date ? {
+      id: `payment-${entry.id || crypto.randomUUID()}`,
+      date: entry.date,
+      title: 'Payment Received',
+      description: `${entry.from || entry.payer || 'Insurance'}${entry.amount ? ` • ${formatCurrency(entry.amount)}` : ''}`,
+      category: 'Insurance',
+    } : null)
+  })
+
+  ;(data.timeline || []).forEach((entry) => {
+    pushTimelineEvent(events, {
+      ...entry,
+      title: entry.title || entry.event || 'Event',
+      category: entry.category || 'Other',
+    })
+  })
+
+  return events.sort((left, right) => new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime())
+}
+
+export function getContractorFindings(report: ContractorReport) {
+  const findings = Array.isArray(report.structuredFindings)
+    ? report.structuredFindings
+    : Array.isArray(report.findings)
+      ? report.findings
+      : String(report.findings || '')
+        .split(/\n|;/)
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+  const recommendations = Array.isArray(report.recommendations)
+    ? report.recommendations
+    : String(report.recommendations || '')
+      .split(/\n|;/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+  return { findings, recommendations }
 }
 
 export function populateDashboardFields(data: ClaimData): ClaimData {

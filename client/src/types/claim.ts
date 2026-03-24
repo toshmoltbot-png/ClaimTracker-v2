@@ -202,6 +202,19 @@ export interface ExpenseEntry extends DynamicFields {
   dateEnd?: string
   description?: string
   amount?: number
+  category?: string
+  vendor?: string
+  lineItems?: Array<{ id?: string; description?: string; amount?: number }>
+  totalDays?: number
+  dailyCost?: number
+  dailyCostIncrease?: number
+  utilityType?: string
+  supportingEvidence?: string
+  isEstimated?: boolean
+  estimationMethod?: string | null
+  estimationDetail?: string | null
+  hours?: number
+  hourlyRate?: number
   receipt?: FileItem | null
 }
 
@@ -211,6 +224,7 @@ export interface Expenses extends DynamicFields {
   disposalEntries: ExpenseEntry[]
   livingEntries: ExpenseEntry[]
   miscEntries: ExpenseEntry[]
+  bufferEnabled?: boolean
 }
 
 export interface Communication extends DynamicFields {
@@ -218,18 +232,49 @@ export interface Communication extends DynamicFields {
   date?: string
   type?: string
   party?: string
+  person?: string
+  contactPerson?: string
+  contact?: string
   summary?: string
+  followUp?: string
+  followUpRequired?: boolean
+  followUpDate?: string
+  followUpTask?: string
   files?: FileItem[]
 }
 
 export interface Contractor extends DynamicFields {
   id?: string
   name?: string
+  company?: string
+  contact?: string
+  contactName?: string
+  phone?: string
+  email?: string
+  trade?: string
+  notes?: string
   estimateFile?: FileItem | null
   invoiceFile?: FileItem | null
 }
 
-export interface ContractorReport extends FileItem {}
+export interface ContractorReport extends FileItem {
+  companyName?: string
+  contactName?: string
+  trade?: string
+  workType?: string
+  findings?: string | string[]
+  structuredFindings?: string[]
+  recommendations?: string | string[]
+  scopeOfWork?: string
+  workDescription?: string
+  dateOfService?: string
+  serviceStartDate?: string
+  serviceEndDate?: string
+  amount?: number
+  totalAmount?: number
+  affectedRooms?: string[]
+  keyLineItems?: string[]
+}
 
 export interface Payment extends DynamicFields {
   id?: string
@@ -238,6 +283,9 @@ export interface Payment extends DynamicFields {
   source?: string
   description?: string
   amount?: number
+  payer?: string
+  type?: string
+  notes?: string
 }
 
 export interface TimelineEvent extends DynamicFields {
@@ -245,6 +293,8 @@ export interface TimelineEvent extends DynamicFields {
   date?: string
   title?: string
   description?: string
+  event?: string
+  category?: string
 }
 
 export interface FloorPlan extends DynamicFields {
