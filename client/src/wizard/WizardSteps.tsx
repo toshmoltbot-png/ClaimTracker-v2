@@ -15,6 +15,7 @@ import {
   updateRoomDimensions,
 } from '@/lib/claimWorkflow'
 import { compressImageToDataUrl, readFileAsDataUrl } from '@/lib/utils'
+import { extractPolicyText, parsePolicyFields } from '@/lib/policyParser'
 import { storeDataUrl } from '@/lib/firebase'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
@@ -79,6 +80,47 @@ export function WizardSteps() {
   const [photoRoomId, setPhotoRoomId] = useState<string>('')
   const [tipDismissed, setTipDismissed] = useState(false)
   const [preScreenModes, setPreScreenModes] = useState<Record<string, AnalysisMode>>({})
+  const [policyUploadStatus, setPolicyUploadStatus] = useState<string>('')
+
+  const handlePolicyUpload = async (file: File) => {
+    setPolicyUploadStatus(`📄 ${file.name} — processing...`)
+    try {
+      const text = await extractPolicyText(file)
+      const { dashboard } = parsePolicyFields(text)
+      const filledCount = Object.keys(dashboard).length
+
+      // Store file reference in policyDocs
+      const docEntry = { id: `pol-${Date.now()}`, name: file.name, docType: 'declarations' }
+
+      // Auto-fill dashboard + claim fields
+      updateData((current) => {
+        const db = { ...current.dashboard }
+        const cl = { ...current.claim }
+        if (dashboard.insuredName) { db.insuredName = dashboard.insuredName; cl.insuredName = dashboard.insuredName }
+        if (dashboard.claimNumber) { db.claimNumber = dashboard.claimNumber; cl.claimNumber = dashboard.claimNumber }
+        if (dashboard.policyNumber) { db.policyNumber = dashboard.policyNumber; cl.policyNumber = dashboard.policyNumber }
+        if (dashboard.insuredAddress) { db.insuredAddress = dashboard.insuredAddress; cl.propertyAddress = dashboard.insuredAddress }
+        if (dashboard.insurerName) { db.insurerName = dashboard.insurerName; cl.insurer = dashboard.insurerName }
+        if (dashboard.deductible) { db.deductible = dashboard.deductible; cl.deductible = dashboard.deductible }
+        if (dashboard.dateOfLoss) { db.dateOfLoss = dashboard.dateOfLoss; cl.dateOfLoss = dashboard.dateOfLoss }
+        return {
+          ...current,
+          dashboard: db,
+          claim: cl,
+          policyDocs: [...(current.policyDocs || []), docEntry],
+        }
+      })
+
+      setPolicyUploadStatus(
+        filledCount > 0
+          ? `✅ ${file.name} — ${filledCount} field${filledCount === 1 ? '' : 's'} filled!`
+          : `⚠️ ${file.name} — couldn't extract fields. Fill them in manually below.`
+      )
+    } catch (err) {
+      console.error('Policy upload failed', err)
+      setPolicyUploadStatus(`⚠️ Could not process ${file.name}. Try another file.`)
+    }
+  }
 
   // Restore step from localStorage only on initial open
   const initializedRef = useRef(false)
@@ -293,27 +335,67 @@ export function WizardSteps() {
         )
       case 2:
         return (
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-200">Claim number</span>
-              <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, claimNumber: event.target.value }, dashboard: { ...current.dashboard, claimNumber: event.target.value } }))} value={data.claim.claimNumber || data.dashboard.claimNumber || ''} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-200">Policy number</span>
-              <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, policyNumber: event.target.value }, dashboard: { ...current.dashboard, policyNumber: event.target.value } }))} value={data.claim.policyNumber || data.dashboard.policyNumber || ''} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-200">Date of loss</span>
-              <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, dateOfLoss: event.target.value }, dashboard: { ...current.dashboard, dateOfLoss: event.target.value } }))} type="date" value={data.claim.dateOfLoss || data.dashboard.dateOfLoss || ''} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-200">Property address</span>
-              <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, propertyAddress: event.target.value }, dashboard: { ...current.dashboard, insuredAddress: event.target.value } }))} value={data.claim.propertyAddress || data.dashboard.insuredAddress || ''} />
-            </label>
-            <label className="space-y-2 md:col-span-2">
-              <span className="text-sm font-medium text-slate-200">Insurer</span>
-              <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, insurer: event.target.value }, dashboard: { ...current.dashboard, insurerName: event.target.value } }))} value={data.claim.insurer || data.dashboard.insurerName || ''} />
-            </label>
+          <div className="space-y-5">
+            {/* ── Policy upload zone ── */}
+            <div
+              className="relative rounded-2xl border-2 border-dashed border-sky-500/30 bg-sky-500/5 px-5 py-6 text-center transition-colors hover:border-sky-400/50 hover:bg-sky-400/10"
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
+              onDrop={async (e) => {
+                e.preventDefault(); e.stopPropagation()
+                const file = e.dataTransfer.files[0]
+                if (file) await handlePolicyUpload(file)
+              }}
+            >
+              <p className="text-sm font-medium text-slate-200">📄 Upload your policy declarations page</p>
+              <p className="mt-1 text-xs text-slate-400">Drag & drop or click to browse · PDF, TXT, or image</p>
+              <input
+                accept=".pdf,.txt,.png,.jpg,.jpeg"
+                className="absolute inset-0 cursor-pointer opacity-0"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (file) await handlePolicyUpload(file)
+                  e.target.value = ''
+                }}
+                type="file"
+              />
+              {policyUploadStatus && (
+                <p className={`mt-3 text-sm ${policyUploadStatus.startsWith('✅') ? 'text-emerald-400' : policyUploadStatus.startsWith('⚠') ? 'text-amber-400' : 'text-slate-400'}`}>
+                  {policyUploadStatus}
+                </p>
+              )}
+            </div>
+
+            {/* ── Manual fields ── */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Claim number</span>
+                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, claimNumber: event.target.value }, dashboard: { ...current.dashboard, claimNumber: event.target.value } }))} value={data.claim.claimNumber || data.dashboard.claimNumber || ''} />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Policy number</span>
+                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, policyNumber: event.target.value }, dashboard: { ...current.dashboard, policyNumber: event.target.value } }))} value={data.claim.policyNumber || data.dashboard.policyNumber || ''} />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Date of loss</span>
+                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, dateOfLoss: event.target.value }, dashboard: { ...current.dashboard, dateOfLoss: event.target.value } }))} type="date" value={data.claim.dateOfLoss || data.dashboard.dateOfLoss || ''} />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Property address</span>
+                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, propertyAddress: event.target.value }, dashboard: { ...current.dashboard, insuredAddress: event.target.value } }))} value={data.claim.propertyAddress || data.dashboard.insuredAddress || ''} />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Insured name</span>
+                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, insuredName: event.target.value }, dashboard: { ...current.dashboard, insuredName: event.target.value } }))} value={data.claim.insuredName || data.dashboard.insuredName || ''} />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Deductible</span>
+                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, deductible: event.target.value }, dashboard: { ...current.dashboard, deductible: event.target.value } }))} placeholder="$1,000" value={data.claim.deductible || data.dashboard.deductible || ''} />
+              </label>
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-sm font-medium text-slate-200">Insurer</span>
+                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, insurer: event.target.value }, dashboard: { ...current.dashboard, insurerName: event.target.value } }))} value={data.claim.insurer || data.dashboard.insurerName || ''} />
+              </label>
+            </div>
           </div>
         )
       case 3:
