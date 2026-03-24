@@ -502,81 +502,49 @@ export function WizardSteps() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex-shrink-0 border-b border-[color:var(--border)] px-6 py-5 sm:px-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-sky-300">Onboarding Wizard</p>
-            <h2 className="mt-3 text-2xl font-semibold text-white">{steps[wizard.step - 1]}</h2>
-            <p className="mt-2 text-sm text-slate-400">Step {wizard.step} of {steps.length}</p>
-          </div>
-          <button className="text-sm text-slate-400 hover:text-white" onClick={closeWizard} type="button">
-            Skip for now
-          </button>
+      {/* Compact header: step dots + title + skip — one line */}
+      <div className="flex flex-shrink-0 items-center gap-4 border-b border-[color:var(--border)] px-5 py-3">
+        <div className="flex items-center gap-1.5">
+          {steps.map((_, index) => {
+            const stepNumber = index + 1
+            return (
+              <button
+                key={stepNumber}
+                onClick={() => { setWizardStep(stepNumber); contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+                className={`h-2.5 rounded-full transition-all ${wizard.step === stepNumber ? 'w-6 bg-sky-400' : stepNumber < wizard.step ? 'w-2.5 bg-sky-400/40' : 'w-2.5 bg-slate-700'}`}
+                title={`Step ${stepNumber}: ${steps[index]}`}
+                type="button"
+              />
+            )
+          })}
         </div>
-        <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-900/80">
-          <div className="h-full rounded-full bg-sky-400 transition-[width]" style={{ width: `${progress}%` }} />
-        </div>
+        <h2 className="flex-1 text-sm font-semibold text-white">
+          <span className="text-slate-500">Step {wizard.step}/{steps.length}</span>{' · '}{steps[wizard.step - 1]}
+        </h2>
+        <button className="text-xs text-slate-400 hover:text-white" onClick={closeWizard} type="button">
+          Skip
+        </button>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto xl:grid-cols-[260px,1fr]">
-        {/* Horizontal scrollable step nav on small screens, vertical sidebar on xl+ */}
-        <aside className="border-b border-[color:var(--border)] bg-slate-950/20 p-3 xl:border-b-0 xl:border-r xl:p-4">
-          <div className="flex gap-2 overflow-x-auto pb-1 xl:flex-col xl:space-y-2 xl:overflow-x-visible xl:pb-0">
-            {steps.map((step, index) => {
-              const stepNumber = index + 1
-              const active = wizard.step === stepNumber
-              return (
-                <button
-                  className={active
-                    ? 'flex-shrink-0 rounded-2xl border border-sky-400/40 bg-sky-400/10 px-4 py-2 text-left text-white xl:w-full xl:py-3'
-                    : 'flex-shrink-0 rounded-2xl border border-transparent px-4 py-2 text-left text-slate-400 hover:border-[color:var(--border)] hover:bg-slate-950/40 hover:text-white xl:w-full xl:py-3'}
-                  key={step}
-                  onClick={() => { setWizardStep(stepNumber); contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
-                  type="button"
-                >
-                  <span className="block text-xs uppercase tracking-[0.2em] text-slate-500 xl:mb-1">Step {stepNumber}</span>
-                  <span className="block text-sm font-medium whitespace-nowrap">{step}</span>
-                </button>
-              )
-            })}
-          </div>
-        </aside>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 
-        <div className="flex min-h-0 flex-col">
-          <div ref={(el) => { contentRef.current = el }} className="flex-1 space-y-5 overflow-y-auto p-6 sm:p-8">
-            {wizardTip ? (
-              <div className="flex items-start justify-between gap-4 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-4 text-sm text-amber-50">
-                <p>{wizardTip}</p>
-                <button
-                  className="text-amber-200/70 hover:text-amber-50"
-                  onClick={() => {
-                    localStorage.setItem(`${ONBOARDING_TIP_PREFIX}${wizard.step}`, 'dismissed')
-                    setTipDismissed(true)
-                  }}
-                  type="button"
-                >
-                  ×
-                </button>
-              </div>
-            ) : null}
+        <div ref={(el) => { contentRef.current = el }} className="flex-1 p-5 sm:p-6">
+          {renderStep()}
+        </div>
 
-            {renderStep()}
-          </div>
-
-          <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border)] px-6 py-4 sm:px-8">
-            <button className="button-secondary" disabled={wizard.step === 1} onClick={previousStep} type="button">
-              Back
+        <div className="flex flex-shrink-0 items-center justify-between gap-3 border-t border-[color:var(--border)] px-5 py-3">
+          <button className="button-secondary text-sm" disabled={wizard.step === 1} onClick={previousStep} type="button">
+            Back
+          </button>
+          <div className="flex gap-3">
+            <button className="button-secondary text-sm" onClick={closeWizard} type="button">
+              Close
             </button>
-            <div className="flex gap-3">
-              <button className="button-secondary" onClick={closeWizard} type="button">
-                Close
+            {wizard.step < steps.length ? (
+              <button className="button-primary text-sm" onClick={nextStep} type="button">
+                Next
               </button>
-              {wizard.step < steps.length ? (
-                <button className="button-primary" onClick={nextStep} type="button">
-                  Next
-                </button>
-              ) : null}
-            </div>
+            ) : null}
           </div>
         </div>
       </div>
