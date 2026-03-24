@@ -405,8 +405,20 @@ export function WizardSteps() {
               <h3 className="text-lg font-semibold text-white">Add a room</h3>
               <input className="field" onChange={(event) => setRoomDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Kitchen, Hallway, Basement..." value={roomDraft.name || ''} />
               <div className="grid gap-3 sm:grid-cols-2">
-                <input className="field" min="0" onChange={(event) => setRoomDraft((current) => updateRoomDimensions({ ...current, length: event.target.value }))} placeholder="Length (ft)" type="number" value={roomDraft.length || ''} />
-                <input className="field" min="0" onChange={(event) => setRoomDraft((current) => updateRoomDimensions({ ...current, width: event.target.value }))} placeholder="Width (ft)" type="number" value={roomDraft.width || ''} />
+                <div>
+                  <span className="mb-1 block text-xs text-slate-400">Length</span>
+                  <div className="flex gap-2">
+                    <input className="field flex-1" min="0" onChange={(event) => setRoomDraft((current) => updateRoomDimensions({ ...current, length: String(Number(event.target.value || 0) + Number((current as unknown as Record<string,string>).lengthInches || 0) / 12) }))} placeholder="ft" type="number" value={Math.floor(Number(roomDraft.length || 0)) || ''} />
+                    <input className="field w-16" min="0" max="11" onChange={(event) => { const inches = Number(event.target.value || 0); setRoomDraft((current) => updateRoomDimensions({ ...current, length: String(Math.floor(Number(current.length || 0)) + inches / 12) })) }} placeholder="in" type="number" value={Math.round((Number(roomDraft.length || 0) % 1) * 12) || ''} />
+                  </div>
+                </div>
+                <div>
+                  <span className="mb-1 block text-xs text-slate-400">Width</span>
+                  <div className="flex gap-2">
+                    <input className="field flex-1" min="0" onChange={(event) => setRoomDraft((current) => updateRoomDimensions({ ...current, width: String(Number(event.target.value || 0) + Number(Math.round((Number(current.width || 0) % 1) * 12)) / 12) }))} placeholder="ft" type="number" value={Math.floor(Number(roomDraft.width || 0)) || ''} />
+                    <input className="field w-16" min="0" max="11" onChange={(event) => { const inches = Number(event.target.value || 0); setRoomDraft((current) => updateRoomDimensions({ ...current, width: String(Math.floor(Number(current.width || 0)) + inches / 12) })) }} placeholder="in" type="number" value={Math.round((Number(roomDraft.width || 0) % 1) * 12) || ''} />
+                  </div>
+                </div>
               </div>
               <textarea className="field min-h-24" onChange={(event) => setRoomDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes" value={roomDraft.notes || ''} />
               <button className="button-primary w-full" onClick={addRoom} type="button">
