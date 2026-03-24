@@ -14,10 +14,19 @@ export interface AnalyzePhotoResponse {
 }
 
 export interface EnrichItemRequest {
+  itemId?: string
   itemName: string
   category?: string
   unitPrice?: number
   quantity?: number
+  enrichmentAttemptId?: string
+  baseline?: Record<string, unknown>
+  userInput?: Record<string, unknown>
+  imageUrls?: string[]
+  images?: string[]
+  justifyMode?: boolean
+  fixedPrice?: number
+  replacementLink?: string
   rationaleMode?: 'replace' | 'justify'
   [key: string]: unknown
 }
@@ -26,6 +35,11 @@ export interface EnrichItemResponse {
   revised?: Record<string, unknown>
   comps?: Array<Record<string, unknown>>
   auditTrail?: Array<Record<string, unknown>>
+  flagged?: boolean
+  enrichmentAttemptId?: string
+  ebayMedian?: number | null
+  ebayLow?: number | null
+  ebayHigh?: number | null
   [key: string]: unknown
 }
 

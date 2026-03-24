@@ -86,16 +86,28 @@ export interface ContentItem extends DynamicFields {
   unitPrice?: number
   total?: number
   replacementCost?: number
+  originalPrice?: number
+  approvedAmount?: number
+  replacementLink?: string
   disposition?: string
+  disposed?: boolean
   contaminated?: boolean
   includedInClaim?: boolean
   status?: string
+  confidence?: number
+  enriched?: boolean
+  source?: string
+  aiBatchId?: string | number
+  sourcePhotoName?: string
+  originalItemName?: string
   porousness?: string
   materialType?: string
   photos?: FileItem[]
   receipt?: FileItem | null
   aiJustification?: string
   contaminationJustification?: string
+  mergeAudit?: Record<string, unknown>
+  _dupFlag?: Record<string, unknown>
   enrichment?: {
     revised?: {
       justification?: string
@@ -186,6 +198,7 @@ export interface FloorPlan extends DynamicFields {
 export interface PolicyDoc extends FileItem {
   id?: string | number
   documentType?: string
+  docType?: string
 }
 
 export interface PolicyInsights extends DynamicFields {

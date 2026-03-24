@@ -3,15 +3,11 @@ export function fmtUSDate(value: string | Date | number | null | undefined): str
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const [year, month, day] = value.split('-').map(Number)
     const date = new Date(year, month - 1, day)
-    return Number.isNaN(date.getTime())
-      ? value
-      : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US')
   }
 
   const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? String(value)
-    : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('en-US')
 }
 
 export function toDate(value: string | Date | number | null | undefined): Date | null {

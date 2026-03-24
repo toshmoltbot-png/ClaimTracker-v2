@@ -6,6 +6,7 @@ import { MobileQuickActions } from '@/components/layout/MobileQuickActions'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { ToastViewport } from '@/components/shared/Toast'
+import { PrePrintModal } from '@/components/pdf/PrePrintModal'
 import { useClaimStore, setupClaimAutosave } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import { CLAIM_TABS, type ClaimTabId } from '@/types/claim'
@@ -82,6 +83,7 @@ function MainShell() {
           <MobileQuickActions />
         </div>
         <OnboardingWizard />
+        <PrePrintModal />
         <ConfirmDialog />
         <ToastViewport />
       </div>
