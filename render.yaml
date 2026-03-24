@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: claimtracker-v2
+    env: node
+    rootDir: .
+    buildCommand: cd client && npm install && npm run build
+    startCommand: node server/server.js
+    autoDeploy: true
