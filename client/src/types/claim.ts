@@ -3,6 +3,7 @@ export type ClaimType = 'category3_sewage' | 'water' | 'fire' | 'storm' | string
 export type AnalysisMode = 'ITEM_VIEW' | 'ROOM_VIEW' | 'FOCUSED_VIEW'
 export type QuantityUnit = 'each' | 'pair' | 'set' | 'box' | string
 export type ToastType = 'success' | 'error' | 'info' | 'warning'
+export type PhotoAnalysisStatus = 'pending' | 'analyzing' | 'complete' | 'failed'
 
 export interface DynamicFields {
   [key: string]: unknown
@@ -29,6 +30,7 @@ export interface FileItem extends DynamicFields {
   imageBase64?: string | null
   roomId?: string | number | null
   file?: FileItem | null
+  localId?: string | null
 }
 
 export interface ClaimCore extends DynamicFields {
@@ -122,11 +124,63 @@ export interface ContentItem extends DynamicFields {
 export interface AIPhoto extends FileItem {
   id?: string | number
   analysisMode?: AnalysisMode
-  status?: string
+  status?: PhotoAnalysisStatus
   isStack?: boolean
   roomName?: string
   stackPhotos?: AIPhoto[]
+  stackPhotoIds?: Array<string | number>
+  stackPhotoNames?: string[]
   lastBatchId?: string
+  aiResultId?: string | number | null
+  notes?: string
+  errorLabel?: string | null
+  failedRequestId?: string | null
+  partial?: boolean
+  collapsed?: boolean
+  source?: string
+  lastAnalyzedAt?: string | null
+  lastAnalyzedMode?: AnalysisMode | null
+  attemptRequestIds?: string[]
+  annotationMarkers?: Array<Record<string, unknown>>
+}
+
+export interface AIDetectedItem extends DynamicFields {
+  label?: string
+  name?: string
+  category?: string
+  quantity?: number
+  quantityUnit?: QuantityUnit
+  replacementPrice?: number | string
+  estimatedValue?: number | string
+  confidence?: number
+  roomAssignment?: string
+  contaminationAssessment?: string
+  contaminationRationale?: string
+  likelyDisposition?: string
+  porousness?: string
+  estimatedAgeYears?: number | null
+  originalPrice?: number | null
+}
+
+export interface AIResultRecord extends DynamicFields {
+  id?: string | number
+  photoId?: string | number
+  sceneSummary?: string
+  riskFlags?: string[]
+  followUpRequests?: string[]
+  confidenceOverall?: number
+  modelUsed?: string
+  createdAt?: string
+  detectedItems?: AIDetectedItem[]
+}
+
+export interface ReceiptLineItem extends DynamicFields {
+  name?: string
+  description?: string
+  quantity?: number
+  unitPrice?: number
+  totalPrice?: number
+  category?: string
 }
 
 export interface Receipt extends FileItem {
@@ -135,7 +189,10 @@ export interface Receipt extends FileItem {
   purchaseDate?: string | null
   date?: string | null
   receiptTotal?: number
-  lineItems?: Array<Record<string, unknown>>
+  lineItems?: ReceiptLineItem[]
+  items?: ReceiptLineItem[]
+  addedToInventory?: boolean
+  inventoryItemIds?: string[]
 }
 
 export interface ExpenseEntry extends DynamicFields {
@@ -236,7 +293,7 @@ export interface ClaimData extends DynamicFields {
   claimType: ClaimType
   claim: ClaimCore
   aiPhotos: AIPhoto[]
-  aiResults: Array<Record<string, unknown>>
+  aiResults: AIResultRecord[]
   followUpTasks: Array<Record<string, unknown>>
   dashboard: DashboardData
   rooms: Room[]

@@ -2,7 +2,24 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { apiClient } from '@/lib/api'
 import { fmtUSDate } from '@/lib/dates'
-import type { ClaimData, ClaimType, ContentItem, DashboardData, Expenses, PolicyDoc, QuantityUnit, Room } from '@/types/claim'
+import { applyCategory3Rules } from '@/lib/sanitizer'
+import { dataUrlToBase64 } from '@/lib/utils'
+import type {
+  AIDetectedItem,
+  AIPhoto,
+  AIResultRecord,
+  AnalysisMode,
+  ClaimData,
+  ClaimType,
+  ContentItem,
+  DashboardData,
+  Expenses,
+  PolicyDoc,
+  QuantityUnit,
+  Receipt,
+  ReceiptLineItem,
+  Room,
+} from '@/types/claim'
 import type { EnrichItemResponse } from '@/types/api'
 
 export const CLAIM_TYPE_OPTIONS: Array<{ value: ClaimType; label: string }> = [
@@ -51,6 +68,8 @@ export const CONTENT_CATEGORIES = [
 export const QUANTITY_UNITS: QuantityUnit[] = ['each', 'pair', 'set', 'box']
 export const DISPOSITION_OPTIONS = ['discarded', 'inspected'] as const
 export const POLICY_DOC_TYPES = ['declarations', 'fullpolicy', 'endorsements', 'correspondence', 'other'] as const
+export const RECEIPT_CATEGORIES = ['cleanup_supplies', 'protective_equipment', 'tools', 'replacement', 'other'] as const
+const ANALYZE_RETRYABLE_STATUS = new Set([429, 502, 503, 504])
 
 export interface DashboardSummary {
   roomsCount: number
@@ -96,9 +115,59 @@ export function normalizeDisposition(value: string | null | undefined) {
   return raw
 }
 
+export function normalizeAnalysisMode(mode: unknown, fallback: AnalysisMode = 'ITEM_VIEW'): AnalysisMode {
+  if (mode === 'FOCUS_ITEM') return 'ITEM_VIEW'
+  if (mode === 'ROOM_SCAN') return 'ROOM_VIEW'
+  if (mode === 'ITEM_VIEW' || mode === 'ROOM_VIEW' || mode === 'FOCUSED_VIEW') return mode
+  return fallback
+}
+
+export function analysisModeLabel(mode: unknown) {
+  const normalized = normalizeAnalysisMode(mode)
+  if (normalized === 'ROOM_VIEW') return 'Room View'
+  if (normalized === 'FOCUSED_VIEW') return 'Focused View'
+  return 'Item View'
+}
+
+export function mapAnalysisModeToBackend(mode: unknown) {
+  const normalized = normalizeAnalysisMode(mode)
+  if (normalized === 'ROOM_VIEW') return 'ROOM_SCAN'
+  if (normalized === 'FOCUSED_VIEW') return 'ROOM_SCAN'
+  return 'FOCUS_ITEM'
+}
+
+export function mapAnalysisModeToPrescreenType(mode: unknown) {
+  const normalized = normalizeAnalysisMode(mode)
+  if (normalized === 'ROOM_VIEW') return 'room_scan'
+  if (normalized === 'FOCUSED_VIEW') return 'focused_view'
+  return 'focus_item'
+}
+
+export function mapPrescreenTypeToAnalysisMode(type: unknown): AnalysisMode {
+  const raw = String(type || '').toLowerCase()
+  if (raw === 'room_scan' || raw === 'room_view') return 'ROOM_VIEW'
+  if (raw === 'focused_view' || raw === 'focus_area') return 'FOCUSED_VIEW'
+  return 'ITEM_VIEW'
+}
+
 function parseNumber(value: unknown) {
   const num = Number(value)
   return Number.isFinite(num) ? num : 0
+}
+
+export function parseMoneyValue(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const cleaned = String(value ?? '').replace(/[^0-9.\-]/g, '')
+  const parsed = Number.parseFloat(cleaned)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function normalizeStringList(values: unknown) {
+  return Array.isArray(values) ? values.map((value) => String(value)).filter(Boolean) : []
+}
+
+function getDetectedItemLabel(item: AIDetectedItem) {
+  return String(item.label || item.name || 'Unnamed item').trim() || 'Unnamed item'
 }
 
 function countItemPhotos(item: ContentItem) {
@@ -306,6 +375,402 @@ export function computePolicyDocInsights(policyDocs: PolicyDoc[]) {
     hasDeclarationsPage: policyDocs.some((doc) => (doc.docType || doc.documentType) === 'declarations'),
     hasFullPolicy: policyDocs.some((doc) => (doc.docType || doc.documentType) === 'fullpolicy'),
     hasEndorsements: policyDocs.some((doc) => (doc.docType || doc.documentType) === 'endorsements'),
+  }
+}
+
+export function buildClaimSummary(data: ClaimData) {
+  const contents = (data.contents || []).filter((item) => item.includedInClaim !== false)
+  const aiPhotos = data.aiPhotos || []
+  const receipts = data.receipts || []
+  const estimatedInventoryValue = contents.reduce((sum, item) => sum + getItemTotalValue(item), 0)
+
+  return {
+    claimType: data.claimType,
+    claimNumber: data.dashboard.claimNumber || data.claim.claimNumber || '',
+    policyNumber: data.dashboard.policyNumber || data.claim.policyNumber || '',
+    propertyAddress: data.dashboard.insuredAddress || data.claim.propertyAddress || '',
+    insurer: data.dashboard.insurerName || data.claim.insurer || '',
+    dateOfLoss: data.dashboard.dateOfLoss || data.claim.dateOfLoss || '',
+    rooms: (data.rooms || []).map((room) => room.name).filter(Boolean),
+    roomCount: data.rooms.length,
+    aiPhotoCount: aiPhotos.length,
+    analyzedPhotoCount: aiPhotos.filter((photo) => photo.status === 'complete').length,
+    contentCount: contents.length,
+    receiptCount: receipts.length,
+    estimatedInventoryValue,
+    expenseTotal: getExpensesTotal(data.expenses),
+    followUpCount: (data.followUpTasks || []).filter((task) => String((task as { status?: string }).status || 'open') === 'open').length,
+  }
+}
+
+export function analyzePhotoRequestBody(data: ClaimData, photo: AIPhoto, options?: { analysisMode?: AnalysisMode; fastMode?: boolean }) {
+  const analysisMode = normalizeAnalysisMode(options?.analysisMode || photo.analysisMode || data.aiAnalysisMode)
+  const base64 = String(photo.imageBase64 || photo.base64 || '')
+    || (typeof photo.dataUrl === 'string' ? dataUrlToBase64(photo.dataUrl) : '')
+    || (typeof photo.url === 'string' && photo.url.startsWith('data:') ? dataUrlToBase64(photo.url) : '')
+
+  const payload: Record<string, unknown> = {
+    imageBase64: base64,
+    mimeType: photo.mimeType || photo.type || 'image/jpeg',
+    roomName: photo.roomName || '',
+    photoName: photo.name || photo.filename || 'Photo',
+    analysisMode: mapAnalysisModeToBackend(analysisMode),
+    claimType: data.claimType || 'category3_sewage',
+    claimSummary: buildClaimSummary(data),
+    claimContext: {
+      dashboard: data.dashboard,
+      claim: data.claim,
+      rooms: data.rooms.map((room) => ({ id: room.id, name: room.name, notes: room.notes })),
+      policyInsights: data.policyInsights,
+    },
+  }
+
+  if (options?.fastMode) payload.fastMode = true
+  return applyAnnotationMarkersToPayload(payload, photo)
+}
+
+export function applyAnnotationMarkersToPayload(payload: Record<string, unknown>, photo: AIPhoto) {
+  const annotations = Array.isArray(photo.annotationMarkers) ? photo.annotationMarkers : []
+  if (annotations.length > 0) {
+    return { ...payload, annotations }
+  }
+  return payload
+}
+
+export async function analyzePhotoVisionWithRetry(
+  data: ClaimData,
+  photo: AIPhoto,
+  options?: { analysisMode?: AnalysisMode; fastMode?: boolean; signal?: AbortSignal; maxRetries?: number },
+) {
+  const maxRetries = options?.maxRetries ?? 3
+  let attempt = 0
+  let lastError: unknown
+
+  while (attempt <= maxRetries) {
+    try {
+      const response = await apiClient.analyzePhoto(analyzePhotoRequestBody(data, photo, options))
+      return response
+    } catch (error) {
+      if (options?.signal?.aborted) throw error
+      lastError = error
+      const message = error instanceof Error ? error.message : String(error)
+      const statusMatch = message.match(/\b(\d{3})\b/)
+      const status = statusMatch ? Number(statusMatch[1]) : null
+      if (!status || !ANALYZE_RETRYABLE_STATUS.has(status) || attempt >= maxRetries) {
+        throw error
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 750 * (attempt + 1)))
+      attempt += 1
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Photo analysis failed.')
+}
+
+export function parseStrictAIResult(payload: Record<string, unknown>): AIResultRecord {
+  const detectedItems = Array.isArray(payload.detectedItems)
+    ? payload.detectedItems.map((item) => ({
+        ...((item as AIDetectedItem) || {}),
+        label: getDetectedItemLabel((item as AIDetectedItem) || {}),
+        quantity: Math.max(1, parseNumber((item as AIDetectedItem)?.quantity) || 1),
+        quantityUnit: String((item as AIDetectedItem)?.quantityUnit || 'each'),
+        replacementPrice: parseMoneyValue((item as AIDetectedItem)?.replacementPrice ?? (item as AIDetectedItem)?.estimatedValue),
+        confidence: Number((item as AIDetectedItem)?.confidence || 0),
+      }))
+    : []
+
+  return {
+    sceneSummary: String(payload.sceneSummary || payload.summary || ''),
+    riskFlags: normalizeStringList(payload.riskFlags),
+    followUpRequests: normalizeStringList(payload.followUpRequests),
+    confidenceOverall: Number(payload.confidenceOverall || 0),
+    modelUsed: String(payload.modelUsed || ''),
+    detectedItems,
+  }
+}
+
+export function buildEvidencePhotosFromAIPhoto(photo: AIPhoto) {
+  const sources = photo.isStack && Array.isArray(photo.stackPhotos) && photo.stackPhotos.length ? photo.stackPhotos : [photo]
+  return sources.map((entry) => ({
+    photoId: entry.id,
+    photoName: String(entry.name || entry.filename || 'Photo'),
+  }))
+}
+
+export function mergeEvidencePhotos(existing: Array<{ photoId?: string | number; photoName?: string }> = [], additions: Array<{ photoId?: string | number; photoName?: string }> = []) {
+  const seen = new Map<string, { photoId?: string | number; photoName?: string }>()
+  for (const item of [...existing, ...additions]) {
+    const key = String(item.photoId || item.photoName || '')
+    if (!key || seen.has(key)) continue
+    seen.set(key, item)
+  }
+  return Array.from(seen.values())
+}
+
+export function mergeSourcePhotoNames(...names: Array<string | null | undefined>) {
+  const seen = new Set<string>()
+  for (const entry of names) {
+    for (const value of String(entry || '').split(',')) {
+      const trimmed = value.trim()
+      if (trimmed) seen.add(trimmed)
+    }
+  }
+  return Array.from(seen).join(', ')
+}
+
+function ensureEnhancedContentShape(item: ContentItem): ContentItem {
+  return {
+    quantity: 1,
+    quantityUnit: 'each',
+    evidencePhotos: [],
+    includedInClaim: true,
+    contaminated: false,
+    confidence: 0,
+    ...item,
+  }
+}
+
+export function createFollowUps(data: ClaimData, photo: AIPhoto, parsed: AIResultRecord, createdItemIds: string[]) {
+  const existingKeys = new Set(
+    (data.followUpTasks || []).map((task) => `${String((task as { photoId?: string | number }).photoId || '')}::${String((task as { prompt?: string }).prompt || '')}`),
+  )
+
+  const prompts = [
+    ...((parsed.followUpRequests || []).map((prompt) => ({ prompt, itemId: null })) || []),
+    ...((parsed.detectedItems || [])
+      .filter((item) => {
+        const text = `${item.category || ''} ${item.label || ''}`.toLowerCase()
+        return /electronics|tv|computer|laptop|phone|tablet|router|appliance/.test(text)
+      })
+      .map((item, index) => ({ prompt: `Was ${getDetectedItemLabel(item)} powered on while wet?`, itemId: createdItemIds[index] || null }))),
+  ]
+
+  const nextTasks = [...data.followUpTasks]
+  prompts.forEach(({ prompt, itemId }) => {
+    const key = `${String(photo.id || '')}::${prompt}`
+    if (existingKeys.has(key)) return
+    existingKeys.add(key)
+    nextTasks.push({
+      id: crypto.randomUUID(),
+      claimId: data.dashboard.claimNumber || data.claim.claimNumber || 'default',
+      roomId: photo.roomId || 'unknown',
+      photoId: photo.id || null,
+      itemId,
+      prompt,
+      status: 'open',
+    })
+  })
+
+  return nextTasks
+}
+
+export function upsertDraftContentFromAI(data: ClaimData, photo: AIPhoto, parsed: AIResultRecord) {
+  const evidencePhotos = buildEvidencePhotosFromAIPhoto(photo)
+  const createdItemIds: string[] = []
+  let contents = [...data.contents]
+
+  for (const detected of parsed.detectedItems || []) {
+    const name = getDetectedItemLabel(detected)
+    const roomName = String(photo.roomName || detected.roomAssignment || 'Unknown')
+    const existingIndex = contents.findIndex(
+      (item) => String(item.itemName || '').trim().toLowerCase() === name.toLowerCase()
+        && String(item.room || item.location || '').trim().toLowerCase() === roomName.toLowerCase(),
+    )
+
+    const ruled = applyCategory3Rules(
+      {
+        id: crypto.randomUUID(),
+        itemName: name,
+        category: detected.category,
+        porousness: detected.porousness,
+        disposition: normalizeDisposition(detected.likelyDisposition),
+      },
+      photo,
+      data.claimType,
+    )
+
+    if (existingIndex >= 0) {
+      const existing = ensureEnhancedContentShape(contents[existingIndex])
+      contents[existingIndex] = {
+        ...existing,
+        category: existing.category || String(detected.category || 'Other'),
+        room: existing.room || roomName,
+        location: existing.location || roomName,
+        roomId: existing.roomId || String(photo.roomId || ''),
+        quantity: Math.max(existing.quantity || 1, Number(detected.quantity || 1)),
+        quantityUnit: existing.quantityUnit || String(detected.quantityUnit || 'each'),
+        replacementCost: Math.max(parseMoneyValue(existing.replacementCost), parseMoneyValue(detected.replacementPrice)),
+        unitPrice: Math.max(parseMoneyValue(existing.unitPrice), parseMoneyValue(detected.replacementPrice)),
+        contaminated: data.claimType === 'category3_sewage' ? true : Boolean(existing.contaminated),
+        disposition: normalizeDisposition(existing.disposition || ruled.disposition),
+        sourcePhotoName: mergeSourcePhotoNames(existing.sourcePhotoName, evidencePhotos.map((entry) => entry.photoName).join(', ')),
+        evidencePhotos: mergeEvidencePhotos(existing.evidencePhotos, evidencePhotos),
+        confidence: Math.max(Number(existing.confidence || 0), Number(detected.confidence || 0)),
+        aiJustification: String(existing.aiJustification || detected.contaminationRationale || ''),
+        source: existing.source || 'ai-draft',
+        status: 'draft',
+        aiBatchId: photo.lastBatchId || existing.aiBatchId,
+      }
+      createdItemIds.push(String(contents[existingIndex].id))
+      continue
+    }
+
+    const itemId = crypto.randomUUID()
+    const nextItem = ensureEnhancedContentShape({
+      id: itemId,
+      itemName: name,
+      label: name,
+      category: String(detected.category || 'Other'),
+      room: roomName,
+      location: roomName,
+      roomId: photo.roomId ? String(photo.roomId) : null,
+      quantity: Math.max(1, Number(detected.quantity || 1)),
+      quantityUnit: String(detected.quantityUnit || 'each'),
+      replacementCost: parseMoneyValue(detected.replacementPrice),
+      unitPrice: parseMoneyValue(detected.replacementPrice),
+      confidence: Number(detected.confidence || 0),
+      contaminated: data.claimType === 'category3_sewage',
+      disposition: normalizeDisposition(detected.likelyDisposition || ruled.disposition),
+      aiJustification: String(detected.contaminationRationale || ''),
+      sourcePhotoName: evidencePhotos.map((entry) => entry.photoName).join(', '),
+      evidencePhotos,
+      source: 'ai-draft',
+      status: 'draft',
+      includedInClaim: true,
+      porousness: detected.porousness,
+      originalPrice: parseMoneyValue(detected.originalPrice),
+      aiBatchId: photo.lastBatchId || undefined,
+    })
+    contents.push(nextItem)
+    createdItemIds.push(itemId)
+  }
+
+  contents = deduplicateDraftItemsBySourcePhotos(contents)
+  const followUpTasks = createFollowUps({ ...data, contents }, photo, parsed, createdItemIds)
+  return { contents, createdItemIds, followUpTasks }
+}
+
+export function autoImportPhotosToAIBuilder(data: ClaimData) {
+  if ((data.aiPhotos || []).length > 0) return data.aiPhotos
+  return (data.photoLibrary || []).map((photo) => ({
+    ...photo,
+    id: photo.id || crypto.randomUUID(),
+    status: 'pending' as const,
+    roomName: String((photo as { roomName?: string }).roomName || ''),
+    analysisMode: data.aiAnalysisMode || 'ITEM_VIEW',
+    source: 'auto-import',
+  }))
+}
+
+export function normalizeReceiptItem(raw: Record<string, unknown> | ReceiptLineItem): ReceiptLineItem {
+  const category = String(raw.category || 'other').toLowerCase()
+  return {
+    name: String(raw.name || raw.description || '').trim(),
+    description: String(raw.description || raw.name || '').trim(),
+    quantity: Math.max(1, Number(raw.quantity || 1)),
+    unitPrice: parseMoneyValue(raw.unitPrice),
+    totalPrice: parseMoneyValue(raw.totalPrice ?? raw.unitPrice),
+    category: (RECEIPT_CATEGORIES as readonly string[]).includes(category) ? category : 'other',
+  }
+}
+
+export function getReceiptItems(receipt: Receipt): ReceiptLineItem[] {
+  const source = Array.isArray(receipt.items) && receipt.items.length ? receipt.items : receipt.lineItems || []
+  return source.map((item) => normalizeReceiptItem(item))
+}
+
+export function normalizeReceiptPayload(payload: Record<string, unknown>, file?: { name?: string; type?: string }): Receipt {
+  const lineItems = Array.isArray(payload.items)
+    ? payload.items.map((item) => normalizeReceiptItem(item as ReceiptLineItem))
+    : Array.isArray(payload.lineItems)
+      ? payload.lineItems.map((item) => normalizeReceiptItem(item as ReceiptLineItem))
+      : []
+  const receiptTotal = parseMoneyValue(payload.receiptTotal ?? payload.total)
+    || lineItems.reduce((sum, item) => sum + parseMoneyValue(item.totalPrice || item.unitPrice), 0)
+
+  return {
+    id: crypto.randomUUID(),
+    fileName: file?.name || 'Receipt',
+    file: null,
+    mimeType: file?.type || 'image/jpeg',
+    uploadedAt: new Date().toISOString(),
+    store: String(payload.store || '').trim(),
+    purchaseDate: String(payload.purchaseDate || payload.date || '').trim(),
+    date: String(payload.date || payload.purchaseDate || '').trim(),
+    receiptTotal,
+    items: lineItems,
+    lineItems,
+    addedToInventory: false,
+    inventoryItemIds: [],
+  }
+}
+
+export function addReceiptToInventory(data: ClaimData, receiptId: string | number) {
+  const receipt = (data.receipts || []).find((entry) => String(entry.id) === String(receiptId))
+  if (!receipt) return data
+  const items = getReceiptItems(receipt)
+  if (!items.length) return data
+
+  const existingIds = new Set((receipt.inventoryItemIds || []).map(String))
+  const newContents = [...data.contents]
+  const createdIds: string[] = []
+  items.forEach((item) => {
+    const itemId = crypto.randomUUID()
+    if (existingIds.has(itemId)) return
+    newContents.push({
+      id: itemId,
+      itemName: item.name || item.description || 'Unknown Item',
+      category: item.category || 'Other',
+      quantity: Math.max(1, Number(item.quantity || 1)),
+      quantityUnit: 'each',
+      replacementCost: parseMoneyValue(item.totalPrice || item.unitPrice),
+      originalPrice: parseMoneyValue(item.totalPrice || item.unitPrice),
+      unitPrice: parseMoneyValue(item.unitPrice || item.totalPrice),
+      includedInClaim: true,
+      source: 'receipt',
+      status: 'draft',
+      confidence: 0.85,
+      receiptId: receipt.id,
+      receiptStore: receipt.store,
+      receiptDate: receipt.purchaseDate || receipt.date,
+    })
+    createdIds.push(itemId)
+  })
+
+  return syncClaimReceipts({
+    ...data,
+    contents: newContents,
+    receipts: data.receipts.map((entry) => (
+      String(entry.id) === String(receiptId)
+        ? { ...entry, addedToInventory: true, inventoryItemIds: createdIds }
+        : entry
+    )),
+  })
+}
+
+export function addReceiptItemsToInventory(data: ClaimData, receiptId: string | number) {
+  return addReceiptToInventory(data, receiptId)
+}
+
+export function syncClaimReceipts(data: ClaimData) {
+  const receiptMap = new Map<string, string[]>()
+  for (const item of data.contents) {
+    if (item.source !== 'receipt') continue
+    const receiptId = String((item as { receiptId?: string | number }).receiptId || '')
+    if (!receiptId) continue
+    receiptMap.set(receiptId, [...(receiptMap.get(receiptId) || []), String(item.id)])
+  }
+
+  return {
+    ...data,
+    receipts: data.receipts.map((receipt) => {
+      const inventoryItemIds = receiptMap.get(String(receipt.id)) || []
+      return {
+        ...receipt,
+        addedToInventory: inventoryItemIds.length > 0,
+        inventoryItemIds,
+      }
+    }),
   }
 }
 

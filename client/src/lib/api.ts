@@ -6,10 +6,13 @@ import type {
   EnrichItemRequest,
   EnrichItemResponse,
   MaximizerChatRequest,
+  MaximizerMetricsRequest,
   MaximizerChatResponse,
+  PreScreenPhotosRequest,
+  PreScreenPhotosResponse,
 } from '@/types/api'
 
-async function postJson<TResponse>(path: string, body: Record<string, unknown>): Promise<TResponse> {
+async function postJson<TResponse>(path: string, body: object): Promise<TResponse> {
   const response = await fetch(path, {
     method: 'POST',
     headers: {
@@ -31,4 +34,6 @@ export const apiClient = {
   enrichItem: (body: EnrichItemRequest) => postJson<EnrichItemResponse>('/api/enrich-item', body),
   analyzeReceipt: (body: AnalyzeReceiptRequest) => postJson<AnalyzeReceiptResponse>('/api/analyze-receipt', body),
   maximizerChat: (body: MaximizerChatRequest) => postJson<MaximizerChatResponse>('/api/maximizer/chat', body),
+  preScreenPhotos: (body: PreScreenPhotosRequest) => postJson<PreScreenPhotosResponse>('/api/pre-screen-photos', body),
+  maximizerMetrics: (body: MaximizerMetricsRequest) => postJson<Record<string, unknown>>('/api/maximizer/metrics', body),
 }

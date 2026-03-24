@@ -1,15 +1,27 @@
 export interface AnalyzePhotoRequest {
   photoUrl?: string
+  photoName?: string
+  imageBase64?: string
+  mimeType?: string
   roomName?: string
   analysisMode?: string
   claimType?: string
+  claimSummary?: Record<string, unknown>
+  claimContext?: Record<string, unknown>
+  annotations?: Array<Record<string, unknown>>
+  fastMode?: boolean
   [key: string]: unknown
 }
 
 export interface AnalyzePhotoResponse {
   detectedItems?: Array<Record<string, unknown>>
   summary?: string
-  followUpTasks?: Array<Record<string, unknown>>
+  sceneSummary?: string
+  riskFlags?: string[]
+  followUpRequests?: string[]
+  confidenceOverall?: number
+  modelUsed?: string
+  partial?: boolean
   [key: string]: unknown
 }
 
@@ -46,14 +58,20 @@ export interface EnrichItemResponse {
 export interface AnalyzeReceiptRequest {
   imageUrl?: string
   receiptBase64?: string
+  imageBase64?: string
+  mimeType?: string
   [key: string]: unknown
 }
 
 export interface AnalyzeReceiptResponse {
+  success?: boolean
   store?: string
+  date?: string
   purchaseDate?: string
+  items?: Array<Record<string, unknown>>
   lineItems?: Array<Record<string, unknown>>
   total?: number
+  receiptTotal?: number
   [key: string]: unknown
 }
 
@@ -68,5 +86,20 @@ export interface MaximizerChatResponse {
   reply: string
   followUps?: string[]
   metrics?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export interface PreScreenPhotosRequest {
+  photos: Array<Record<string, unknown>>
+}
+
+export interface PreScreenPhotosResponse {
+  results?: Array<Record<string, unknown>>
+  suggestedStacks?: string[][]
+  [key: string]: unknown
+}
+
+export interface MaximizerMetricsRequest {
+  event: string
   [key: string]: unknown
 }

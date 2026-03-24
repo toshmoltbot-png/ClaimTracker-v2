@@ -79,3 +79,21 @@ export function estimateDataUrlBytes(dataUrl: string): number {
   const base64 = dataUrl.split(',')[1] ?? ''
   return Math.floor(base64.length * 0.75)
 }
+
+export function dataUrlToBase64(dataUrl: string): string {
+  return dataUrl.split(',')[1] ?? ''
+}
+
+export function getDataUrlMimeType(dataUrl: string): string {
+  const match = dataUrl.match(/^data:(.*?);base64,/)
+  return match?.[1] || 'application/octet-stream'
+}
+
+export function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`))
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.readAsDataURL(file)
+  })
+}
