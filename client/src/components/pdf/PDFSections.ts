@@ -462,14 +462,96 @@ export async function renderCoverPage(ctx: PDFSectionContext) {
   ctx.y += 12
 }
 
+export async function renderClaimOverview(ctx: PDFSectionContext) {
+  sectionHeader(ctx, 'Claim Overview')
+  const dashboard = ctx.data.dashboard || {}
+  const claim = ctx.data.claim || {}
+  const financials = getClaimFinancials(ctx)
+  autoTable(ctx.doc, {
+    startY: ctx.y,
+    margin: { left: ctx.ML, right: ctx.MR },
+    head: [['Field', 'Value', 'Field', 'Value']],
+    body: [
+      ['Claim #', dashboard.claimNumber || claim.claimNumber || 'N/A', 'Contents Value', formatCurrency(financials.contentsTotal)],
+      ['Policy #', dashboard.policyNumber || claim.policyNumber || 'N/A', 'Out-of-Pocket Expenses', formatCurrency(financials.expensesTotal)],
+      ['Insured Name', dashboard.insuredName || 'N/A', 'Deductible', financials.deductible > 0 ? `(${formatCurrency(financials.deductible)})` : 'N/A'],
+      ['Address', dashboard.insuredAddress || claim.propertyAddress || 'N/A', 'Total Claimed', formatCurrency(financials.totalClaimed)],
+      ['Date of Loss', normalizeClaimDate(dashboard.dateOfLoss || claim.dateOfLoss), 'Total Paid', formatCurrency(financials.totalPaid)],
+      ['Date Reported', normalizeClaimDate(dashboard.dateReported), 'Depreciation Withheld', formatCurrency(financials.depreciation)],
+      ['Claim Status', dashboard.claimStatus || 'Open', 'Outstanding Balance', formatCurrency(financials.outstanding)],
+      ['Insurer', dashboard.insurerName || claim.insurer || 'N/A', 'Water Backup Limit', formatCurrencyOrNA(dashboard.waterBackupLimit || ctx.data.policyInsights?.waterBackupLimit)],
+    ],
+    styles: { fontSize: 9, cellPadding: 3.5 },
+    headStyles: { fillColor: LIGHT_BLUE, textColor: NAVY, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 26 },
+      2: { fontStyle: 'bold', cellWidth: 34 },
+      3: { halign: 'right' },
+    },
+  })
+  ctx.y = (((ctx.doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY) || ctx.y) + 4
+
+  const adjusterName = String(dashboard.adjusterName || '').trim()
+  const adjusterPhone = getAdjusterPhone(ctx.data)
+  const adjusterEmail = String(dashboard.adjusterEmail || '').trim()
+  if (adjusterName || adjusterPhone || adjusterEmail) {
+    ensureSpace(ctx, 14)
+    ctx.doc.setFillColor(249, 250, 251)
+    ctx.doc.roundedRect(ctx.ML, ctx.y, ctx.CW, 9, 2, 2, 'F')
+    ctx.doc.setFontSize(8.5)
+    ctx.doc.setFont('helvetica', 'bold')
+    setMutedText(ctx.doc)
+    ctx.doc.text('ADJUSTER:', ctx.ML + 3, ctx.y + 6)
+    resetText(ctx.doc)
+    ctx.doc.text([adjusterName, adjusterPhone, adjusterEmail].filter(Boolean).join('  |  '), ctx.ML + 23, ctx.y + 6)
+    ctx.doc.setFont('helvetica', 'normal')
+    ctx.y += 12
+  } else {
+    ctx.y += 4
+  }
+
+  const boxHeight = financials.deductible > 0 ? 34 : 30
+  ensureSpace(ctx, boxHeight + 2)
+  ctx.doc.setFillColor(LIGHT_BLUE[0], LIGHT_BLUE[1], LIGHT_BLUE[2])
+  ctx.doc.setDrawColor(59, 130, 246)
+  ctx.doc.roundedRect(ctx.ML, ctx.y, ctx.CW, boxHeight, 2, 2, 'FD')
+  ctx.doc.setFont('helvetica', 'bold')
+  ctx.doc.setFontSize(9)
+  ctx.doc.setTextColor(30, 64, 120)
+  ctx.doc.text('WHAT THIS REPORT COVERS', ctx.ML + 4, ctx.y + 6)
+  ctx.doc.setFont('helvetica', 'normal')
+  ctx.doc.setFontSize(8)
+  ctx.doc.setTextColor(55, 65, 81)
+  let lineY = ctx.y + 12
+  ctx.doc.text(`Personal Property: ${formatCurrency(financials.contentsTotal)}`, ctx.ML + 6, lineY)
+  lineY += 4.5
+  ctx.doc.text(`Out-of-Pocket Expenses: ${financials.expensesTotal > 0 ? formatCurrency(financials.expensesTotal) : 'See Expenses section'}`, ctx.ML + 6, lineY)
+  lineY += 4.5
+  if (financials.deductible > 0) {
+    ctx.doc.text(`Less Deductible: (${formatCurrency(financials.deductible)})`, ctx.ML + 6, lineY)
+    lineY += 4.5
+  }
+  ctx.doc.setFont('helvetica', 'bold')
+  ctx.doc.setTextColor(30, 64, 120)
+  ctx.doc.text(`Total Claimed: ${formatCurrency(financials.totalClaimed)}`, ctx.ML + 6, lineY)
+  lineY += 5
+  ctx.doc.setFontSize(7.5)
+  ctx.doc.setTextColor(180, 60, 20)
+  ctx.doc.text("This total is IN ADDITION TO contractor invoices and the adjuster's structural repair estimates.", ctx.ML + 4, lineY)
+  resetText(ctx.doc)
+  ctx.doc.setFont('helvetica', 'normal')
+  ctx.y += boxHeight + 6
+}
+
 export async function renderExecutiveSummary(ctx: PDFSectionContext) {
   sectionHeader(ctx, 'Executive Summary')
   const summary = updateDashboardSummary(ctx.data)
-  const contentsValue = ctx.contents.reduce((sum, item) => sum + getItemTotalValue(item), 0)
+  const financials = getClaimFinancials(ctx)
   const body = [
     ['Rooms documented', String(summary.roomsCount), 'Items included', String(summary.itemCount)],
     ['Evidence photos', String(summary.photoCount), 'Pricing support added', `${Math.round(summary.enrichedPercent)}%`],
-    ['Contents total', formatCurrency(contentsValue), 'Expenses total', formatCurrency(getExpensesTotal(ctx.data.expenses))],
+    ['Contents total', formatCurrency(financials.contentsTotal), 'Expenses total', formatCurrency(financials.expensesTotal)],
     ['Payments received', formatCurrency(getPaymentsTotal(ctx.payments)), 'Claim readiness', `${Math.round(summary.readinessPercent)}%`],
   ]
   autoTable(ctx.doc, {
@@ -482,10 +564,48 @@ export async function renderExecutiveSummary(ctx: PDFSectionContext) {
     alternateRowStyles: { fillColor: [249, 250, 251] },
   })
   ctx.y = (((ctx.doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY) || ctx.y) + 8
-  const summaryText = `This supplemental package documents ${ctx.contents.length} contents item${ctx.contents.length === 1 ? '' : 's'}, ${ctx.rooms.length} room${ctx.rooms.length === 1 ? '' : 's'}, and supporting expenses for adjuster review.`
+  const dashboard = ctx.data.dashboard || {}
+  const claim = ctx.data.claim || {}
+  const insuredName = dashboard.insuredName || 'The policyholder'
+  const lossDate = normalizeClaimDate(dashboard.dateOfLoss || claim.dateOfLoss)
+  const address = dashboard.insuredAddress || claim.propertyAddress || 'the insured property'
+  const totalSqFt = ctx.rooms.reduce((sum, room) => sum + Number(room.sqft || 0), 0)
+  const servProReport = (ctx.data.contractorReports || []).find((report) => String(report.companyName || report.name || '').toLowerCase().includes('servpro'))
+  const firstReport = (ctx.data.contractorReports || []).find((report) => String(report.companyName || report.name || '').trim())
+  const remediationCompany = servProReport?.companyName || servProReport?.name || firstReport?.companyName || firstReport?.name || 'a remediation contractor'
+  const remediationStarts = (ctx.data.contractorReports || []).map((report) => String(report.serviceStartDate || report.dateOfService || '').trim()).filter(Boolean).sort()
+  const remediationEnds = (ctx.data.contractorReports || []).map((report) => String(report.serviceEndDate || report.dateOfService || '').trim()).filter(Boolean).sort()
+  const remediationWindow = remediationStarts.length
+    ? `${remediationCompany} performed remediation from ${normalizeClaimDate(remediationStarts[0])} through ${normalizeClaimDate(remediationEnds[remediationEnds.length - 1] || remediationStarts[0])}. `
+    : ''
+  const iicrcNote = String(ctx.data.claimType || '').toLowerCase().includes('category3') || String(ctx.data.claimType || '').toLowerCase().includes('sewage')
+    ? 'Items were evaluated for contamination consistent with IICRC S500 standards for Category 3 water.'
+    : 'Evaluation considered the documented loss conditions and IICRC S500 remediation standards.'
+  const summaryText = `${insuredName} experienced the reported loss on ${lossDate} at ${address}. The documented claim includes ${ctx.rooms.length} room${ctx.rooms.length === 1 ? '' : 's'} totaling approximately ${Math.round(totalSqFt)} square feet. ${remediationWindow}This supplemental report documents ${ctx.contents.length} personal property item${ctx.contents.length === 1 ? '' : 's'} valued at ${formatCurrency(financials.contentsTotal)}, ${formatCurrency(financials.expensesTotal)} in out-of-pocket expenses, a deductible of ${formatCurrency(financials.deductible)}, and a total supplemental claim of ${formatCurrency(financials.totalClaimed)}. ${iicrcNote}`
   ctx.doc.setFontSize(9.5)
   ctx.doc.text(ctx.doc.splitTextToSize(summaryText, ctx.CW), ctx.ML, ctx.y)
-  ctx.y += 10
+  ctx.y += ctx.doc.splitTextToSize(summaryText, ctx.CW).length * 4.5 + 4
+}
+
+export async function renderCauseOfLoss(ctx: PDFSectionContext) {
+  sectionHeader(ctx, 'Cause Of Loss')
+  ctx.doc.setFontSize(9)
+  setMutedText(ctx.doc)
+  ctx.doc.text(`Incident Type: ${formatClaimLabel(ctx.data.claim?.incidentType)}  ·  Claim Type: ${formatClaimLabel(ctx.data.claimType)}`, ctx.ML, ctx.y + 4)
+  resetText(ctx.doc)
+  ctx.y += 9
+  const narrative = String(ctx.data.claim?.description || '').trim()
+  if (!narrative) {
+    setMutedText(ctx.doc)
+    ctx.doc.text('No cause of loss narrative provided.', ctx.ML, ctx.y + 4)
+    resetText(ctx.doc)
+    ctx.y += 10
+    return
+  }
+  const lines = ctx.doc.splitTextToSize(narrative, ctx.CW)
+  ctx.doc.setFontSize(9)
+  ctx.doc.text(lines, ctx.ML, ctx.y + 4)
+  ctx.y += lines.length * 4 + 4
 }
 
 export async function renderClaimBasisStatement(ctx: PDFSectionContext) {
@@ -759,6 +879,57 @@ export async function renderPhotoEvidence(ctx: PDFSectionContext, onStatus?: (st
   }
 }
 
+export async function renderDamageAssessment(ctx: PDFSectionContext) {
+  ctx.doc.addPage()
+  ctx.y = 15
+  sectionHeader(ctx, 'Damage Assessment')
+  const counts = {
+    discarded: 0,
+    clean: 0,
+    inspected: 0,
+    pending: 0,
+  }
+  ctx.contents.forEach((item) => {
+    const disposition = normalizeDisposition(item.disposition)
+    if (disposition === 'discarded') {
+      counts.discarded += 1
+      return
+    }
+    if (disposition === 'inspected') {
+      counts.inspected += 1
+      return
+    }
+    if (disposition === 'clean') {
+      counts.clean += 1
+      return
+    }
+    counts.pending += 1
+  })
+  const gap = 6
+  const tileWidth = (ctx.CW - gap * 3) / 4
+  const tileHeight = 26
+  const tiles = [
+    { label: 'Discarded', value: counts.discarded, fill: [254, 242, 242] as [number, number, number], text: [185, 28, 28] as [number, number, number] },
+    { label: 'Clean', value: counts.clean, fill: [240, 253, 244] as [number, number, number], text: [21, 128, 61] as [number, number, number] },
+    { label: 'Inspected', value: counts.inspected, fill: [255, 251, 235] as [number, number, number], text: [180, 83, 9] as [number, number, number] },
+    { label: 'Pending Review', value: counts.pending, fill: [243, 244, 246] as [number, number, number], text: [75, 85, 99] as [number, number, number] },
+  ]
+  tiles.forEach((tile, index) => {
+    const x = ctx.ML + index * (tileWidth + gap)
+    ctx.doc.setFillColor(tile.fill[0], tile.fill[1], tile.fill[2])
+    ctx.doc.roundedRect(x, ctx.y, tileWidth, tileHeight, 2, 2, 'F')
+    ctx.doc.setFont('helvetica', 'bold')
+    ctx.doc.setFontSize(16)
+    ctx.doc.setTextColor(tile.text[0], tile.text[1], tile.text[2])
+    ctx.doc.text(String(tile.value), x + tileWidth / 2, ctx.y + 11, { align: 'center' })
+    ctx.doc.setFontSize(8.5)
+    ctx.doc.text(tile.label, x + tileWidth / 2, ctx.y + 19, { align: 'center' })
+  })
+  resetText(ctx.doc)
+  ctx.doc.setFont('helvetica', 'normal')
+  ctx.y += tileHeight + 8
+}
+
 export async function renderExpenses(ctx: PDFSectionContext, onStatus?: (status: string) => void) {
   ctx.doc.addPage()
   ctx.y = 15
@@ -794,6 +965,54 @@ export async function renderExpenses(ctx: PDFSectionContext, onStatus?: (status:
     headStyles: { fillColor: LIGHT_BLUE, textColor: NAVY, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: { 0: { cellWidth: 25 }, 3: { halign: 'right', cellWidth: 26 } },
+  })
+  ctx.y = (((ctx.doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY) || ctx.y) + 8
+}
+
+export async function renderPolicyCoverage(ctx: PDFSectionContext) {
+  sectionHeader(ctx, 'Policy Coverage')
+  const policyInsights = ctx.data.policyInsights || {}
+  if (!hasMeaningfulValue(policyInsights)) {
+    setMutedText(ctx.doc)
+    ctx.doc.text('No policy document uploaded.', ctx.ML, ctx.y + 4)
+    resetText(ctx.doc)
+    ctx.y += 10
+    return
+  }
+  autoTable(ctx.doc, {
+    startY: ctx.y,
+    margin: { left: ctx.ML, right: ctx.MR },
+    head: [['Coverage', 'Limit']],
+    body: [
+      ['Coverage A (Dwelling)', formatCurrencyOrNA(policyInsights.limits?.A)],
+      ['Coverage B (Other Structures)', formatCurrencyOrNA(policyInsights.limits?.B)],
+      ['Coverage C (Personal Property)', formatCurrencyOrNA(policyInsights.limits?.C)],
+      ['Coverage D (Loss of Use)', formatCurrencyOrNA(policyInsights.limits?.D)],
+    ],
+    styles: { fontSize: 8.5, cellPadding: 3 },
+    headStyles: { fillColor: LIGHT_BLUE, textColor: NAVY, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
+    columnStyles: { 1: { halign: 'right', cellWidth: 34 } },
+  })
+  ctx.y = (((ctx.doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY) || ctx.y) + 4
+  autoTable(ctx.doc, {
+    startY: ctx.y,
+    margin: { left: ctx.ML, right: ctx.MR },
+    head: [['Policy Details', 'Value']],
+    body: [
+      ['Loss Settlement Type', String(policyInsights.lossSettlementType || 'N/A')],
+      ['Water Backup Limit', formatCurrencyOrNA(policyInsights.waterBackupLimit)],
+      ['Mold Limit', formatCurrencyOrNA(policyInsights.moldLimit)],
+      ['Deductible', formatCurrencyOrNA(policyInsights.sectionIDeductible)],
+      ['Loss of Use Coverage', policyInsights.hasLossOfUse ? 'Yes' : 'No'],
+      ['Water Backup Endorsement', policyInsights.hasWaterBackup ? 'Yes' : 'No'],
+      ['Matching Coverage', policyInsights.hasMatching ? 'Yes' : 'No'],
+      ['Ordinance / Law', policyInsights.hasOrdinanceLaw ? 'Yes' : 'No'],
+    ],
+    styles: { fontSize: 8.5, cellPadding: 3 },
+    headStyles: { fillColor: LIGHT_BLUE, textColor: NAVY, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
+    columnStyles: { 1: { halign: 'right', cellWidth: 38 } },
   })
   ctx.y = (((ctx.doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY) || ctx.y) + 8
 }
@@ -951,6 +1170,68 @@ export async function renderSourceLinks(ctx: PDFSectionContext) {
   }
 }
 
+export async function renderClaimSummary(ctx: PDFSectionContext) {
+  const financials = getClaimFinancials(ctx)
+  ctx.doc.addPage()
+  ctx.y = 15
+  sectionHeader(ctx, 'Claim Summary')
+  const body = [
+    ['Personal Property', formatCurrency(financials.contentsTotal)],
+    ['Out-of-Pocket Expenses', formatCurrency(financials.expensesTotal)],
+    ['Less Deductible', `(${formatCurrency(financials.deductible)})`],
+    ['Total Claimed', formatCurrency(financials.totalClaimed)],
+    ['Total Paid to Date', formatCurrency(financials.totalPaid)],
+    ['Outstanding Balance', formatCurrency(financials.outstanding)],
+  ]
+  autoTable(ctx.doc, {
+    startY: ctx.y,
+    margin: { left: ctx.ML, right: ctx.MR },
+    head: [['Category', 'Amount']],
+    body,
+    styles: { fontSize: 9.5, cellPadding: 3 },
+    headStyles: { fillColor: LIGHT_BLUE, textColor: NAVY, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
+    columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+    didParseCell: (hook) => {
+      if (hook.section === 'body' && hook.row.index === 3) {
+        hook.cell.styles.fontStyle = 'bold'
+        hook.cell.styles.fillColor = [255, 255, 240]
+      }
+    },
+  })
+  ctx.y = (((ctx.doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY) || ctx.y) + 6
+
+  const noticeLines = [
+    'The amounts above represent documented personal property losses and out-of-pocket expenses only.',
+    'They are supplemental to contractor invoices, structural estimates, remediation bills, and other Coverage A repair costs.',
+  ]
+  const noticeHeight = 18
+  ensureSpace(ctx, noticeHeight + 4)
+  ctx.doc.setFillColor(YELLOW_BG[0], YELLOW_BG[1], YELLOW_BG[2])
+  ctx.doc.setDrawColor(YELLOW_BORDER[0], YELLOW_BORDER[1], YELLOW_BORDER[2])
+  ctx.doc.roundedRect(ctx.ML, ctx.y, ctx.CW, noticeHeight, 2, 2, 'FD')
+  ctx.doc.setFont('helvetica', 'bold')
+  ctx.doc.setFontSize(8.5)
+  ctx.doc.setTextColor(120, 80, 0)
+  ctx.doc.text('IMPORTANT:', ctx.ML + 4, ctx.y + 6)
+  ctx.doc.setFont('helvetica', 'normal')
+  ctx.doc.setTextColor(90, 70, 0)
+  ctx.doc.text(noticeLines, ctx.ML + 4, ctx.y + 10)
+  resetText(ctx.doc)
+  ctx.y += noticeHeight + 8
+
+  ensureSpace(ctx, 16)
+  ctx.doc.setFont('helvetica', 'normal')
+  ctx.doc.setFontSize(9)
+  ctx.doc.text('Prepared by:', ctx.ML, ctx.y + 6)
+  ctx.doc.line(ctx.ML + 24, ctx.y + 6.5, ctx.ML + 90, ctx.y + 6.5)
+  ctx.doc.text('Date:', ctx.ML + 98, ctx.y + 6)
+  ctx.doc.line(ctx.ML + 108, ctx.y + 6.5, ctx.ML + 140, ctx.y + 6.5)
+  ctx.y += 12
+  ctx.doc.text(`Policyholder: ${ctx.data.dashboard?.insuredName || 'N/A'}`, ctx.ML, ctx.y + 6)
+  ctx.y += 10
+}
+
 export function addPageFooters(ctx: PDFSectionContext) {
   const count = ctx.doc.getNumberOfPages()
   const dashboard = ctx.data.dashboard || {}
@@ -969,17 +1250,22 @@ export function addPageFooters(ctx: PDFSectionContext) {
 
 export async function renderAllPDFSections(ctx: PDFSectionContext, options: PDFRenderOptions = {}) {
   await renderCoverPage(ctx)
+  await renderClaimOverview(ctx)
   await renderExecutiveSummary(ctx)
+  await renderCauseOfLoss(ctx)
   await renderClaimBasisStatement(ctx)
   await renderTimeline(ctx)
   await renderRoomDocumentation(ctx, options.onStatus)
   await renderFloorPlan(ctx)
   await renderContentsInventory(ctx, options.onStatus)
   await renderPhotoEvidence(ctx, options.onStatus)
+  await renderDamageAssessment(ctx)
   await renderExpenses(ctx, options.onStatus)
+  await renderPolicyCoverage(ctx)
   await renderContractorReports(ctx)
   await renderReceipts(ctx)
   await renderCommunicationsLog(ctx)
   await renderPayments(ctx)
   await renderSourceLinks(ctx)
+  await renderClaimSummary(ctx)
 }
