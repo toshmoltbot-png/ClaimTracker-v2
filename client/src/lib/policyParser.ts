@@ -3,6 +3,8 @@
  * Ported from ClaimTracker v1 (index.html lines 13433–13820).
  */
 
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+
 // ─── Text extraction ────────────────────────────────────────────────
 
 export async function extractPolicyText(file: File): Promise<string> {
@@ -18,7 +20,7 @@ export async function extractPolicyText(file: File): Promise<string> {
     const buf = await file.arrayBuffer()
     try {
       const pdfjsLib = await import('pdfjs-dist')
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise
       const pagesText: string[] = []
       for (let i = 1; i <= pdf.numPages; i++) {
