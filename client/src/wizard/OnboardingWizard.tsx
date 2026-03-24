@@ -10,7 +10,7 @@ export function OnboardingWizard() {
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 px-4 py-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950 px-4 py-6"
       onClick={() => setWizardOpen(false)}
       role="dialog"
     >

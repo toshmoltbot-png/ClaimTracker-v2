@@ -542,26 +542,28 @@ export function WizardSteps() {
           </div>
         </aside>
 
-        <div ref={(el) => { contentRef.current = el }} className="space-y-5 p-6 sm:p-8">
-          {wizardTip ? (
-            <div className="flex items-start justify-between gap-4 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-4 text-sm text-amber-50">
-              <p>{wizardTip}</p>
-              <button
-                className="text-amber-200/70 hover:text-amber-50"
-                onClick={() => {
-                  localStorage.setItem(`${ONBOARDING_TIP_PREFIX}${wizard.step}`, 'dismissed')
-                  setTipDismissed(true)
-                }}
-                type="button"
-              >
-                ×
-              </button>
-            </div>
-          ) : null}
+        <div className="flex min-h-0 flex-col">
+          <div ref={(el) => { contentRef.current = el }} className="flex-1 space-y-5 overflow-y-auto p-6 sm:p-8">
+            {wizardTip ? (
+              <div className="flex items-start justify-between gap-4 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-4 text-sm text-amber-50">
+                <p>{wizardTip}</p>
+                <button
+                  className="text-amber-200/70 hover:text-amber-50"
+                  onClick={() => {
+                    localStorage.setItem(`${ONBOARDING_TIP_PREFIX}${wizard.step}`, 'dismissed')
+                    setTipDismissed(true)
+                  }}
+                  type="button"
+                >
+                  ×
+                </button>
+              </div>
+            ) : null}
 
-          {renderStep()}
+            {renderStep()}
+          </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border)] px-6 py-4 sm:px-8">
             <button className="button-secondary" disabled={wizard.step === 1} onClick={previousStep} type="button">
               Back
             </button>
