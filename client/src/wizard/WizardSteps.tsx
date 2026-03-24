@@ -99,6 +99,7 @@ export function WizardSteps() {
     setTipDismissed(localStorage.getItem(`${ONBOARDING_TIP_PREFIX}${wizard.step}`) === 'dismissed')
   }, [wizard.step])
 
+  const contentRef = { current: null as HTMLDivElement | null }
   const progress = Math.round((wizard.step / steps.length) * 100)
   const photoEntries = useMemo(() => buildPhotoLibraryEntries(data), [data])
   const wizardTip = !tipDismissed ? stepTips[wizard.step] : null
@@ -500,8 +501,8 @@ export function WizardSteps() {
   }
 
   return (
-    <div>
-      <div className="border-b border-[color:var(--border)] px-6 py-5 sm:px-8">
+    <div className="flex flex-col" style={{ maxHeight: 'calc(100vh - 48px)' }}>
+      <div className="flex-shrink-0 border-b border-[color:var(--border)] px-6 py-5 sm:px-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-sky-300">Onboarding Wizard</p>
@@ -517,28 +518,31 @@ export function WizardSteps() {
         </div>
       </div>
 
-      <div className="grid gap-0 xl:grid-cols-[260px,1fr]">
-        <aside className="border-r border-[color:var(--border)] bg-slate-950/20 p-4">
-          <div className="space-y-2">
+      <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto xl:grid-cols-[260px,1fr]">
+        {/* Horizontal scrollable step nav on small screens, vertical sidebar on xl+ */}
+        <aside className="border-b border-[color:var(--border)] bg-slate-950/20 p-3 xl:border-b-0 xl:border-r xl:p-4">
+          <div className="flex gap-2 overflow-x-auto pb-1 xl:flex-col xl:space-y-2 xl:overflow-x-visible xl:pb-0">
             {steps.map((step, index) => {
               const stepNumber = index + 1
               const active = wizard.step === stepNumber
               return (
                 <button
-                  className={active ? 'w-full rounded-2xl border border-sky-400/40 bg-sky-400/10 px-4 py-3 text-left text-white' : 'w-full rounded-2xl border border-transparent px-4 py-3 text-left text-slate-400 hover:border-[color:var(--border)] hover:bg-slate-950/40 hover:text-white'}
+                  className={active
+                    ? 'flex-shrink-0 rounded-2xl border border-sky-400/40 bg-sky-400/10 px-4 py-2 text-left text-white xl:w-full xl:py-3'
+                    : 'flex-shrink-0 rounded-2xl border border-transparent px-4 py-2 text-left text-slate-400 hover:border-[color:var(--border)] hover:bg-slate-950/40 hover:text-white xl:w-full xl:py-3'}
                   key={step}
-                  onClick={() => setWizardStep(stepNumber)}
+                  onClick={() => { setWizardStep(stepNumber); contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
                   type="button"
                 >
-                  <span className="block text-xs uppercase tracking-[0.2em] text-slate-500">Step {stepNumber}</span>
-                  <span className="mt-1 block text-sm font-medium">{step}</span>
+                  <span className="block text-xs uppercase tracking-[0.2em] text-slate-500 xl:mb-1">Step {stepNumber}</span>
+                  <span className="block text-sm font-medium whitespace-nowrap">{step}</span>
                 </button>
               )
             })}
           </div>
         </aside>
 
-        <div className="space-y-5 p-6 sm:p-8">
+        <div ref={(el) => { contentRef.current = el }} className="space-y-5 p-6 sm:p-8">
           {wizardTip ? (
             <div className="flex items-start justify-between gap-4 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-4 text-sm text-amber-50">
               <p>{wizardTip}</p>

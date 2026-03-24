@@ -15,7 +15,8 @@ export function OnboardingWizard() {
       role="dialog"
     >
       <div
-        className="panel-elevated mx-auto w-full max-w-6xl overflow-hidden rounded-[28px]"
+        className="panel-elevated mx-auto flex w-full max-w-6xl flex-col overflow-hidden rounded-[28px]"
+        style={{ maxHeight: 'calc(100vh - 48px)' }}
         onClick={(event) => event.stopPropagation()}
       >
         <WizardSteps />
