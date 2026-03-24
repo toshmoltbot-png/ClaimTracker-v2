@@ -60,7 +60,16 @@ export async function generateClaimPDF(data: ClaimData) {
     addPageFooters(ctx)
     const fileName = safeClaimFileName(data)
     usePDFProgressStore.getState().complete('Finalizing and downloading report…')
-    doc.save(fileName)
+    // jsPDF 4.x: use blob + anchor tag for reliable filename
+    const pdfBlob = doc.output('blob')
+    const blobUrl = URL.createObjectURL(pdfBlob)
+    const anchor = document.createElement('a')
+    anchor.href = blobUrl
+    anchor.download = fileName
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    URL.revokeObjectURL(blobUrl)
     window.setTimeout(() => {
       usePDFProgressStore.getState().complete('Report downloaded.')
       window.setTimeout(() => usePDFProgressStore.getState().reset(), 1200)
