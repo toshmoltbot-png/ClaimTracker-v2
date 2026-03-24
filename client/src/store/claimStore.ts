@@ -8,6 +8,7 @@ interface ClaimState {
   data: ClaimData
   hydrated: boolean
   dirty: boolean
+  cloudLoadSucceeded: boolean
   loadStatus: 'idle' | 'loading' | 'loaded' | 'error'
   updateData: (updater: (current: ClaimData) => ClaimData) => void
   replaceData: (data: ClaimData) => void
@@ -22,6 +23,7 @@ export const useClaimStore = create<ClaimState>((set) => ({
   data: createDefaultClaimData(),
   hydrated: false,
   dirty: false,
+  cloudLoadSucceeded: false,
   loadStatus: 'idle',
   updateData: (updater) =>
     set((state) => ({
@@ -40,14 +42,16 @@ export const useClaimStore = create<ClaimState>((set) => ({
         data: sanitized,
         hydrated: true,
         dirty: false,
+        cloudLoadSucceeded: true,
         loadStatus: 'loaded',
       })
       useUIStore.getState().setSaveStatus(cloud ? 'saved' : 'offline')
     } catch {
-      // Fall back to local cache when cloud fails
+      // Fall back to local cache when cloud fails — DO NOT allow cloud saves
+      // to prevent overwriting real data with empty defaults
       const local = loadLocalClaim()
       const sanitized = sanitizeClaimData(local)
-      set({ data: sanitized, hydrated: true, loadStatus: 'error' })
+      set({ data: sanitized, hydrated: true, cloudLoadSucceeded: false, loadStatus: 'error' })
       useUIStore.getState().setSaveStatus('error')
       useUIStore.getState().setOffline(true)
       useUIStore.getState().pushToast('Cloud load failed — working from local cache.', 'warning')
@@ -90,6 +94,13 @@ export function setupClaimAutosave() {
 
   useClaimStore.subscribe((state, previous) => {
     if (!state.hydrated || !state.dirty || state.data === previous.data) return
+    // CRITICAL: Never save to cloud if the initial load failed — prevents overwriting
+    // real data with empty defaults when the user lands on a new domain/device
+    if (!state.cloudLoadSucceeded) {
+      // Still persist locally as a safety net, but never push empty defaults to cloud
+      persistLocal(state.data)
+      return
+    }
     if (debounceTimer) window.clearTimeout(debounceTimer)
     debounceTimer = window.setTimeout(() => {
       void runAutosave(useClaimStore.getState().data)
