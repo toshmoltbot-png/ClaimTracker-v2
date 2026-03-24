@@ -30,6 +30,20 @@ export function getUid(): string | null {
   return auth.currentUser?.uid ?? null
 }
 
+/** Wait for Firebase Auth to finish restoring the session from IndexedDB */
+export function waitForAuth(): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (auth.currentUser) {
+      resolve(auth.currentUser.uid)
+      return
+    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe()
+      resolve(user?.uid ?? null)
+    })
+  })
+}
+
 export async function login(email: string, password: string) {
   return signInWithEmailAndPassword(auth, email, password)
 }
@@ -60,10 +74,12 @@ export function stripUndefined<T>(value: T): T {
   return value
 }
 
-export async function loadClaim(uid = getUid()): Promise<ClaimData | null> {
-  if (!uid) return null
+export async function loadClaim(uid?: string | null): Promise<ClaimData | null> {
+  // Wait for Firebase Auth to finish restoring session before reading
+  const resolvedUid = uid ?? await waitForAuth()
+  if (!resolvedUid) return null
   // Match v1 Firestore path: users/{uid}/claims/default
-  const snapshot = await getDoc(doc(db, 'users', uid, 'claims', 'default'))
+  const snapshot = await getDoc(doc(db, 'users', resolvedUid, 'claims', 'default'))
   return snapshot.exists() ? (snapshot.data() as ClaimData) : null
 }
 
