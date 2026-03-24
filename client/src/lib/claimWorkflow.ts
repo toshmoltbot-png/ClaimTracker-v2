@@ -1732,7 +1732,7 @@ export function generateContentsChecklistPDF(data: ClaimData, mode: 'download' |
 
   autoTable(doc, {
     startY: 32,
-    head: [['Item', 'Room', 'Category', 'Qty', 'Value']],
+    head: [['Item', 'Room', 'Category', 'Qty', 'Replacement Cost']],
     body: items.map((item) => [
       String(item.itemName || 'Unnamed item'),
       String(item.room || 'Unassigned'),
@@ -1745,6 +1745,12 @@ export function generateContentsChecklistPDF(data: ClaimData, mode: 'download' |
     alternateRowStyles: { fillColor: [250, 250, 250] },
     columnStyles: { 4: { halign: 'right' } },
   })
+
+  const finalY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 32
+  doc.setFontSize(8)
+  doc.setTextColor(100, 116, 139)
+  doc.text(`Claim #${claimNumber}  ·  Generated ${fmtUSDate(generated)}`, 14, Math.min(finalY + 8, 285))
+  doc.setTextColor(0, 0, 0)
 
   const fileName = `contents-checklist-${String(claimNumber).replace(/[^a-z0-9-_]+/gi, '-').toLowerCase() || 'claim'}.pdf`
   if (mode === 'print') {

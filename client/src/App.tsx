@@ -7,6 +7,7 @@ import { AuthGuard } from '@/components/layout/AuthGuard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { ToastViewport } from '@/components/shared/Toast'
 import { PrePrintModal } from '@/components/pdf/PrePrintModal'
+import { PDFProgress } from '@/components/pdf/PDFProgress'
 import { useClaimStore, setupClaimAutosave } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import { CLAIM_TABS, type ClaimTabId } from '@/types/claim'
@@ -98,6 +99,7 @@ function MainShell() {
         </div>
         <OnboardingWizard />
         <PrePrintModal />
+        <PDFProgress />
         <ConfirmDialog />
         <ToastViewport />
       </div>
