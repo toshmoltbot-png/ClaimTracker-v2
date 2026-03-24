@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PhotoUploader } from '@/components/shared/PhotoUploader'
 import {
   CLAIM_TYPE_OPTIONS,
@@ -80,16 +80,20 @@ export function WizardSteps() {
   const [tipDismissed, setTipDismissed] = useState(false)
   const [preScreenModes, setPreScreenModes] = useState<Record<string, AnalysisMode>>({})
 
+  // Restore step from localStorage only on initial open
+  const initializedRef = useRef(false)
   useEffect(() => {
-    if (wizard.open) {
+    if (wizard.open && !initializedRef.current) {
+      initializedRef.current = true
       const stored = getStoredOnboardingStep()
       if (wizard.step !== stored) setWizardStep(stored)
     }
-  }, [setWizardStep, wizard.open, wizard.step])
+  }, [setWizardStep, wizard.open]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Persist step changes to localStorage
   useEffect(() => {
-    setStoredOnboardingStep(wizard.step)
-  }, [wizard.step])
+    if (wizard.open) setStoredOnboardingStep(wizard.step)
+  }, [wizard.step, wizard.open])
 
   useEffect(() => {
     setPhotoRoomId((current) => current || data.rooms[0]?.id || '')
