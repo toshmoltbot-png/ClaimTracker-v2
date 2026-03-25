@@ -46,17 +46,7 @@ export function FloorPlanCanvas() {
       context.stroke()
     }
 
-    if (floorPlan.showConnections !== false) {
-      const visible = layouts.filter((layout) => layout.visible)
-      context.strokeStyle = 'rgba(125,211,252,0.4)'
-      context.lineWidth = 2
-      for (let index = 1; index < visible.length; index += 1) {
-        context.beginPath()
-        context.moveTo(visible[index - 1].centerX, visible[index - 1].centerY)
-        context.lineTo(visible[index].centerX, visible[index].centerY)
-        context.stroke()
-      }
-    }
+    // Connection lines removed — they added visual noise without meaning
   }, [floorPlan.showConnections, layouts, scale])
 
   function handlePointerDown(roomId: string, event: React.PointerEvent<HTMLDivElement>) {
