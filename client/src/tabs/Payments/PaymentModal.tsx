@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '@/components/shared/Modal'
-import { createPaymentDraft, normalizePaymentDraft, PAYMENT_TYPE_OPTIONS } from '@/lib/claimWorkflow'
+import { createPaymentDraft, normalizePaymentDraft, PAYMENT_COVERAGE_TYPE_OPTIONS, PAYMENT_TYPE_OPTIONS } from '@/lib/claimWorkflow'
 import type { Payment } from '@/types/claim'
 
 interface PaymentModalProps {
@@ -56,9 +56,26 @@ export function PaymentModal({ open, payment, onClose, onSave }: PaymentModalPro
             ))}
           </select>
         </label>
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-200">What it covers</span>
+          <select className="field" onChange={(event) => setDraft((current) => ({ ...current, coverageType: event.target.value }))} value={draft.coverageType || ''}>
+            <option value="">Select...</option>
+            {PAYMENT_COVERAGE_TYPE_OPTIONS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-200">Check # / Confirmation</span>
+          <input className="field" onChange={(event) => setDraft((current) => ({ ...current, checkNumber: event.target.value }))} value={draft.checkNumber || ''} />
+        </label>
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-200">Depreciation holdback</span>
+          <input className="field" type="number" min="0" step="0.01" onChange={(event) => setDraft((current) => ({ ...current, depreciation: Number(event.target.value || 0) }))} value={draft.depreciation || ''} />
+        </label>
         <label className="space-y-2 md:col-span-2">
           <span className="text-sm font-medium text-slate-200">Notes</span>
-          <textarea className="field min-h-28" onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value, description: event.target.value }))} value={draft.notes || draft.description || ''} />
+          <textarea className="field min-h-20" onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value, description: event.target.value }))} value={draft.notes || draft.description || ''} />
         </label>
       </div>
     </Modal>

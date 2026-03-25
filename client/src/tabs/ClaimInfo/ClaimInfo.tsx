@@ -103,13 +103,47 @@ export function ClaimInfo() {
             <input className="field" onChange={(event) => updateField('adjusterName', event.target.value)} value={data.dashboard.adjusterName} />
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-200">Adjuster contact</span>
-            <input
-              className="field"
-              onChange={(event) => updateField('adjusterEmail', event.target.value)}
-              placeholder="Email or phone"
-              value={data.dashboard.adjusterEmail}
-            />
+            <span className="text-sm font-medium text-slate-200">Adjuster email</span>
+            <input className="field" type="email" onChange={(event) => updateField('adjusterEmail', event.target.value)} value={data.dashboard.adjusterEmail} />
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-200">Adjuster phone</span>
+            <input className="field" type="tel" onChange={(event) => updateData((c) => ({ ...c, dashboard: { ...c.dashboard, adjusterPhone: event.target.value } }))} value={data.dashboard.adjusterPhone || ''} />
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-200">Date reported</span>
+            <input className="field" type="date" onChange={(event) => updateData((c) => ({ ...c, dashboard: { ...c.dashboard, dateReported: event.target.value } }))} value={data.dashboard.dateReported || ''} />
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-200">Deductible</span>
+            <input className="field" onChange={(event) => updateData((c) => ({ ...c, dashboard: { ...c.dashboard, deductible: event.target.value } }))} placeholder="$1,000" value={data.dashboard.deductible || ''} />
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-200">Coverage type</span>
+            <select className="field" onChange={(event) => updateData((c) => ({ ...c, dashboard: { ...c.dashboard, coverageType: event.target.value } }))} value={data.dashboard.coverageType || ''}>
+              <option value="">Select...</option>
+              <option value="HO-3">HO-3 (Special Form)</option>
+              <option value="HO-5">HO-5 (Comprehensive)</option>
+              <option value="HO-4">HO-4 (Renters)</option>
+              <option value="HO-6">HO-6 (Condo)</option>
+              <option value="DP-3">DP-3 (Dwelling)</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-200">Water backup limit</span>
+            <input className="field" onChange={(event) => updateData((c) => ({ ...c, dashboard: { ...c.dashboard, waterBackupLimit: event.target.value } }))} placeholder="$10,000" value={data.dashboard.waterBackupLimit || ''} />
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-200">Claim status</span>
+            <select className="field" onChange={(event) => updateData((c) => ({ ...c, dashboard: { ...c.dashboard, claimStatus: event.target.value } }))} value={data.dashboard.claimStatus || ''}>
+              <option value="">Select...</option>
+              <option value="Open">Open</option>
+              <option value="Estimate Received">Estimate Received</option>
+              <option value="Partial Payment">Partial Payment</option>
+              <option value="Closed">Closed</option>
+              <option value="Disputed">Disputed</option>
+            </select>
           </label>
         </div>
       </section>

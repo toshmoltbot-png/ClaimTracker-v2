@@ -67,10 +67,40 @@ export function CommunicationModal({ open, communication, onClose, onSave }: Com
           <span className="text-sm font-medium text-slate-200">With whom</span>
           <input className="field" onChange={(event) => setDraft((current) => ({ ...current, person: event.target.value, contactPerson: event.target.value }))} value={draft.person || draft.contactPerson || ''} />
         </label>
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-200">Contact phone/email</span>
+          <input className="field" onChange={(event) => setDraft((current) => ({ ...current, commContact: event.target.value }))} placeholder="(555) 123-4567 or email" value={draft.commContact || ''} />
+        </label>
         <label className="space-y-2 md:col-span-2">
           <span className="text-sm font-medium text-slate-200">Summary</span>
           <textarea className="field min-h-28" onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))} value={draft.summary || ''} />
         </label>
+        <label className="flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-slate-950/30 px-4 py-3">
+          <input checked={Boolean(draft.promiseMade)} onChange={(event) => setDraft((current) => ({ ...current, promiseMade: event.target.checked }))} type="checkbox" />
+          <span className="text-sm text-slate-200">Promise was made</span>
+        </label>
+        {draft.promiseMade ? (
+          <label className="flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-slate-950/30 px-4 py-3">
+            <input checked={Boolean(draft.promiseFulfilled)} onChange={(event) => setDraft((current) => ({ ...current, promiseFulfilled: event.target.checked }))} type="checkbox" />
+            <span className="text-sm text-slate-200">Promise fulfilled</span>
+          </label>
+        ) : null}
+        {draft.promiseMade ? (
+          <>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-200">Promised amount</span>
+              <input className="field" type="number" min="0" step="0.01" onChange={(event) => setDraft((current) => ({ ...current, promisedAmount: Number(event.target.value) || 0 }))} value={draft.promisedAmount || ''} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-200">Promised by date</span>
+              <input className="field" type="date" onChange={(event) => setDraft((current) => ({ ...current, promisedByDate: event.target.value }))} value={draft.promisedByDate || ''} />
+            </label>
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm font-medium text-slate-200">Commitments / promises</span>
+              <textarea className="field min-h-20" onChange={(event) => setDraft((current) => ({ ...current, commitments: event.target.value }))} placeholder="What was promised..." value={draft.commitments || ''} />
+            </label>
+          </>
+        ) : null}
         <label className="flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-slate-950/30 px-4 py-3 md:col-span-2">
           <input
             checked={Boolean(draft.followUpRequired)}
