@@ -465,30 +465,52 @@ export function WizardSteps() {
             </div>
           </div>
         )
-      case 4:
+      case 4: {
+        const currentRoomIndex = data.rooms.findIndex((r) => r.id === photoRoomId)
+        const currentRoom = data.rooms[currentRoomIndex] || data.rooms[0]
+        const roomIndex = currentRoomIndex >= 0 ? currentRoomIndex : 0
+        const hasNextRoom = roomIndex < data.rooms.length - 1
         return (
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center gap-3">
-              <select className="field max-w-72" onChange={(event) => setPhotoRoomId(event.target.value)} value={photoRoomId}>
-                <option value="">Select room</option>
-                {data.rooms.map((room) => (
-                  <option key={room.id} value={room.id}>
-                    {room.name || 'Room'}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <PhotoUploader label="Upload room photos" onFilesSelected={(files) => void uploadRoomPhotos(files)} />
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {data.rooms.map((room) => (
-                <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4" key={room.id}>
-                  <p className="font-semibold text-white">{room.name || 'Room'}</p>
-                  <p className="mt-1 text-sm text-slate-400">{(room.photos || []).length} photo{(room.photos || []).length === 1 ? '' : 's'}</p>
+            {data.rooms.length > 0 ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <button className="button-secondary text-sm" disabled={roomIndex === 0} onClick={() => setPhotoRoomId(data.rooms[roomIndex - 1]?.id || '')} type="button">←</button>
+                    <h3 className="text-lg font-semibold text-white">{currentRoom?.name || 'Room'} <span className="text-sm font-normal text-slate-400">— {roomIndex + 1} of {data.rooms.length}</span></h3>
+                    <button className="button-secondary text-sm" disabled={!hasNextRoom} onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">→</button>
+                  </div>
+                  <span className="text-sm text-slate-400">{(currentRoom?.photos || []).length} photo{(currentRoom?.photos || []).length === 1 ? '' : 's'}</span>
                 </div>
+                <PhotoUploader label={`Upload photos for ${currentRoom?.name || 'this room'}`} onFilesSelected={(files) => void uploadRoomPhotos(files)} />
+                {hasNextRoom ? (
+                  <button className="button-primary" onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">
+                    Next room: {data.rooms[roomIndex + 1]?.name || 'Room'} →
+                  </button>
+                ) : (
+                  <p className="text-sm text-emerald-400">✅ All rooms covered. Click Next to continue.</p>
+                )}
+              </>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
+                <p className="text-sm text-slate-400">Add rooms in the previous step first, then come back to upload photos.</p>
+              </div>
+            )}
+            <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-4">
+              {data.rooms.map((room, i) => (
+                <button
+                  className={`rounded-xl border px-3 py-2 text-left text-sm ${room.id === (currentRoom?.id || '') ? 'border-sky-400/50 bg-sky-400/10 text-white' : 'border-[color:var(--border)] bg-slate-950/40 text-slate-400'}`}
+                  key={room.id}
+                  onClick={() => setPhotoRoomId(room.id)}
+                  type="button"
+                >
+                  {room.name || `Room ${i + 1}`} · {(room.photos || []).length} 📷
+                </button>
               ))}
             </div>
           </div>
         )
+      }
       case 5:
         return (
           <div className="space-y-5">
