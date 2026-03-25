@@ -30,7 +30,7 @@ const steps = [
   'Claim Info',
   'Rooms',
   'Photos',
-  'Pre-Screen',
+  'Photo Review',
   'Floor Plan',
   'Receipts',
   'Contractors',
@@ -567,49 +567,61 @@ export function WizardSteps() {
           </div>
         )
       }
-      case 5:
+      case 5: {
+        const totalPhotos = data.rooms.reduce((sum, r) => sum + (r.photos || []).length, 0)
+        const roomsWithPhotos = data.rooms.filter((r) => (r.photos || []).length > 0)
+        const roomsWithoutPhotos = data.rooms.filter((r) => (r.photos || []).length === 0)
         return (
           <div className="space-y-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold text-white">Photo pre-screen</h3>
-                <p className="mt-2 text-sm leading-7 text-slate-300">
-                  Tell the AI how to analyze each photo. Click a photo to cycle through modes:
-                </p>
-                <div className="mt-3 space-y-1.5">
-                  <p className="text-sm text-slate-300"><span className="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-xs font-semibold text-sky-100">ROOM_VIEW</span> — Wide shot of the room. AI identifies all visible damage and affected areas.</p>
-                  <p className="text-sm text-slate-300"><span className="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-xs font-semibold text-sky-100">ITEM_VIEW</span> — Close-up of a specific item. AI extracts item details, condition, and replacement cost.</p>
-                  <p className="text-sm text-slate-300"><span className="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-xs font-semibold text-sky-100">FOCUSED_VIEW</span> — Zoomed in on specific damage (cracks, stains, mold). AI documents the damage evidence.</p>
-                </div>
-                <p className="mt-3 text-xs text-slate-500">Don't worry about getting this perfect — you can change modes later in AI Builder. Skip this step to use automatic defaults.</p>
-              </div>
-              <button className="button-primary flex-shrink-0" onClick={applyPreScreen} type="button">
-                Apply to AI Builder
-              </button>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Photo review</h3>
+              <p className="mt-2 text-sm leading-7 text-slate-300">
+                You've uploaded <span className="font-semibold text-white">{totalPhotos} photo{totalPhotos === 1 ? '' : 's'}</span> across{' '}
+                <span className="font-semibold text-white">{roomsWithPhotos.length} room{roomsWithPhotos.length === 1 ? '' : 's'}</span>.
+                Review coverage below before continuing.
+              </p>
             </div>
+
+            {roomsWithoutPhotos.length > 0 && (
+              <div className="rounded-2xl border border-amber-400/30 bg-amber-400/5 px-5 py-4">
+                <p className="text-sm font-medium text-amber-300">⚠ {roomsWithoutPhotos.length} room{roomsWithoutPhotos.length === 1 ? '' : 's'} with no photos:</p>
+                <p className="mt-1 text-sm text-slate-300">{roomsWithoutPhotos.map((r) => r.name || 'Untitled').join(', ')}</p>
+                <button className="mt-3 text-xs font-medium text-amber-300 hover:text-amber-100" onClick={() => { setPhotoRoomId(roomsWithoutPhotos[0]?.id || ''); previousStep() }} type="button">← Go back and add photos</button>
+              </div>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {photoEntries.length ? photoEntries.map((entry) => {
-                const mode = preScreenModes[entry.id] || (entry.roomId ? 'ROOM_VIEW' : 'ITEM_VIEW')
-                return (
-                  <button
-                    className="overflow-hidden rounded-3xl border border-[color:var(--border)] bg-slate-950/35 text-left transition hover:border-sky-400/40"
-                    key={entry.id}
-                    onClick={() => setPreScreenModes((current) => ({ ...current, [entry.id]: cycleMode(mode) }))}
-                    title="Click to change analysis mode"
-                    type="button"
-                  >
-                    <img alt={entry.name} className="aspect-video w-full object-cover" src={entry.previewUrl} />
-                    <div className="space-y-2 px-4 py-4">
-                      <p className="truncate text-sm font-semibold text-white">{entry.name}</p>
-                      <p className="text-xs text-slate-400">{entry.roomName || 'Unassigned'} · click to change mode</p>
-                      <span className="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-100">{mode}</span>
+              {data.rooms.map((room) => (
+                <div className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-slate-950/35" key={room.id}>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <p className="font-semibold text-white">{room.name || 'Untitled'}</p>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${(room.photos || []).length > 0 ? 'bg-emerald-400/15 text-emerald-300' : 'bg-slate-700/50 text-slate-500'}`}>
+                      {(room.photos || []).length} 📷
+                    </span>
+                  </div>
+                  {(room.photos || []).length > 0 ? (
+                    <div className="grid grid-cols-3 gap-1 px-1 pb-1">
+                      {(room.photos || []).slice(0, 6).map((photo) => (
+                        <img
+                          alt={photo.name || photo.filename || room.name || 'Room photo'}
+                          className="aspect-square rounded-lg object-cover"
+                          key={String(photo.id || photo.url || photo.path)}
+                          src={photo.url || photo.dataUrl || photo.data || ''}
+                        />
+                      ))}
+                      {(room.photos || []).length > 6 && (
+                        <div className="flex aspect-square items-center justify-center rounded-lg bg-slate-800 text-sm text-slate-400">+{(room.photos || []).length - 6}</div>
+                      )}
                     </div>
-                  </button>
-                )
-              }) : <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-10 text-center text-sm text-slate-400">Upload room photos first.</div>}
+                  ) : (
+                    <div className="px-4 pb-4 text-xs text-slate-500">No photos yet</div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )
+      }
       case 6:
         return (
           <div className="space-y-4">
