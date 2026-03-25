@@ -571,24 +571,47 @@ export function WizardSteps() {
         const totalPhotos = data.rooms.reduce((sum, r) => sum + (r.photos || []).length, 0)
         const roomsWithoutPhotos = data.rooms.filter((r) => (r.photos || []).length === 0)
 
-        // Detect duplicates by original filename (the user-facing name before upload)
+        // Detect duplicates two ways:
+        // 1. Exact filename match (same file uploaded twice)
+        // 2. Same file size for image files (catches "file copy.jpg" / "file.jpg" pairs)
         // Storage paths are timestamped so always unique — useless for dupe detection
-        const photoFingerprints = new Map<string, Array<{ roomId: string; roomName: string; photoKey: string }>>()
+        const byName = new Map<string, string[]>()
+        const bySize = new Map<string, string[]>()
+        const allPhotos: Array<{ roomId: string; roomName: string; photoKey: string; name: string; size: number }> = []
         for (const room of data.rooms) {
           for (const photo of room.photos || []) {
             const name = (photo.name || photo.filename || '').toLowerCase().trim()
-            if (!name) continue
+            const size = photo.size || 0
             const photoKey = String(photo.id || photo.url || photo.path)
-            if (!photoFingerprints.has(name)) photoFingerprints.set(name, [])
-            photoFingerprints.get(name)!.push({ roomId: String(room.id), roomName: room.name || 'Untitled', photoKey })
+            allPhotos.push({ roomId: String(room.id), roomName: room.name || 'Untitled', photoKey, name, size })
+            if (name) {
+              if (!byName.has(name)) byName.set(name, [])
+              byName.get(name)!.push(photoKey)
+            }
+            // Size-based: only for images >10KB (avoids false positives on tiny files)
+            if (size > 10240) {
+              const sizeKey = String(size)
+              if (!bySize.has(sizeKey)) bySize.set(sizeKey, [])
+              bySize.get(sizeKey)!.push(photoKey)
+            }
           }
         }
         const duplicateKeys = new Set<string>()
         let duplicateCount = 0
-        for (const [, entries] of photoFingerprints) {
-          if (entries.length > 1) {
+        for (const [, keys] of byName) {
+          if (keys.length > 1) {
             duplicateCount++
-            for (const e of entries) duplicateKeys.add(e.photoKey)
+            for (const k of keys) duplicateKeys.add(k)
+          }
+        }
+        for (const [, keys] of bySize) {
+          if (keys.length > 1) {
+            // Only flag if not already caught by name match
+            const uncaught = keys.filter((k) => !duplicateKeys.has(k))
+            if (uncaught.length > 0 && keys.length > 1) {
+              duplicateCount++
+              for (const k of keys) duplicateKeys.add(k)
+            }
           }
         }
 
