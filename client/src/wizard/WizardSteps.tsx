@@ -488,9 +488,7 @@ export function WizardSteps() {
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-400">Adding photos to</p>
                         <h3 className="text-xl font-bold text-white">{currentRoom?.name || 'Room'}</h3>
                       </div>
-                      {hasNextRoom && (
-                        <button className="button-secondary text-sm" onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">→</button>
-                      )}
+                      <button className="button-secondary text-sm" onClick={() => hasNextRoom ? setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '') : nextStep()} type="button">→</button>
                     </div>
                     <span className="rounded-full bg-sky-400/15 px-3 py-1 text-sm font-semibold text-sky-200">
                       {roomIndex + 1} of {data.rooms.length} · {(currentRoom?.photos || []).length} 📷
