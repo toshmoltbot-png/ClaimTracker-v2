@@ -476,53 +476,75 @@ export function WizardSteps() {
           <div className="space-y-5">
             {data.rooms.length > 0 ? (
               <>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <button className="button-secondary text-sm" disabled={roomIndex === 0} onClick={() => setPhotoRoomId(data.rooms[roomIndex - 1]?.id || '')} type="button">←</button>
-                    <h3 className="text-lg font-semibold text-white">{currentRoom?.name || 'Room'} <span className="text-sm font-normal text-slate-400">— {roomIndex + 1} of {data.rooms.length}</span></h3>
-                    <button className="button-secondary text-sm" disabled={!hasNextRoom} onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">→</button>
-                  </div>
-                  <span className="text-sm text-slate-400">{(currentRoom?.photos || []).length} photo{(currentRoom?.photos || []).length === 1 ? '' : 's'}</span>
-                </div>
-                <PhotoUploader key={photoRoomId} label={`Upload photos for ${currentRoom?.name || 'this room'}`} onFilesSelected={(files) => void uploadRoomPhotos(files)} />
-                {(currentRoom?.photos || []).length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-slate-300">{(currentRoom.photos || []).length} photo{(currentRoom.photos || []).length === 1 ? '' : 's'} uploaded</p>
-                    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-                      {(currentRoom.photos || []).map((photo) => (
-                        <div className="group relative" key={String(photo.id || photo.url || photo.path)}>
-                          <img
-                            alt={photo.name || photo.filename || currentRoom.name || 'Room photo'}
-                            className="aspect-square rounded-xl object-cover"
-                            src={photo.url || photo.dataUrl || photo.data || ''}
-                          />
-                          <button
-                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100"
-                            onClick={() => {
-                              const photoKey = String(photo.id || photo.url || photo.path)
-                              updateData((current) => ({
-                                ...current,
-                                rooms: current.rooms.map((r) =>
-                                  String(r.id) === String(currentRoom.id)
-                                    ? { ...r, photos: (r.photos || []).filter((p) => String(p.id || p.url || p.path) !== photoKey) }
-                                    : r
-                                ),
-                              }))
-                              pushToast('Photo removed.', 'info')
-                            }}
-                            title="Remove photo"
-                            type="button"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
+                {/* ── Current room card: groups header + uploader + thumbnails ── */}
+                <div className="rounded-2xl border border-sky-400/30 bg-sky-950/20 p-5 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <button className="button-secondary text-sm" disabled={roomIndex === 0} onClick={() => setPhotoRoomId(data.rooms[roomIndex - 1]?.id || '')} type="button">←</button>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-400">Adding photos to</p>
+                        <h3 className="text-xl font-bold text-white">{currentRoom?.name || 'Room'}</h3>
+                      </div>
+                      <button className="button-secondary text-sm" disabled={!hasNextRoom} onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">→</button>
                     </div>
+                    <span className="rounded-full bg-sky-400/15 px-3 py-1 text-sm font-semibold text-sky-200">{roomIndex + 1} of {data.rooms.length} · {(currentRoom?.photos || []).length} 📷</span>
                   </div>
-                )}
+                  <PhotoUploader key={photoRoomId} label={`Upload photos for ${currentRoom?.name || 'this room'}`} onFilesSelected={(files) => void uploadRoomPhotos(files)} />
+                  {(currentRoom?.photos || []).length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-slate-300">{(currentRoom.photos || []).length} photo{(currentRoom.photos || []).length === 1 ? '' : 's'} uploaded</p>
+                      <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                        {(currentRoom.photos || []).map((photo) => (
+                          <div className="group relative" key={String(photo.id || photo.url || photo.path)}>
+                            <img
+                              alt={photo.name || photo.filename || currentRoom.name || 'Room photo'}
+                              className="aspect-square rounded-xl object-cover"
+                              src={photo.url || photo.dataUrl || photo.data || ''}
+                            />
+                            <button
+                              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100"
+                              onClick={() => {
+                                const photoKey = String(photo.id || photo.url || photo.path)
+                                updateData((current) => ({
+                                  ...current,
+                                  rooms: current.rooms.map((r) =>
+                                    String(r.id) === String(currentRoom.id)
+                                      ? { ...r, photos: (r.photos || []).filter((p) => String(p.id || p.url || p.path) !== photoKey) }
+                                      : r
+                                  ),
+                                }))
+                                pushToast('Photo removed.', 'info')
+                              }}
+                              title="Remove photo"
+                              type="button"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Room selector grid ── */}
+                <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-4">
+                  {data.rooms.map((room, i) => (
+                    <button
+                      className={`rounded-xl border px-3 py-2 text-left text-sm ${room.id === (currentRoom?.id || '') ? 'border-sky-400/50 bg-sky-400/10 text-white' : 'border-[color:var(--border)] bg-slate-950/40 text-slate-400'}`}
+                      key={room.id}
+                      onClick={() => setPhotoRoomId(room.id)}
+                      type="button"
+                    >
+                      {room.name || `Room ${i + 1}`} · {(room.photos || []).length} 📷
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── Next room / done indicator — secondary, below grid ── */}
                 {hasNextRoom ? (
-                  <button className="button-primary" onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">
-                    Next room: {data.rooms[roomIndex + 1]?.name || 'Room'} →
+                  <button className="button-secondary w-full text-sm" onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">
+                    Continue to next room →
                   </button>
                 ) : (
                   <p className="text-sm text-emerald-400">✅ All rooms covered. Click Next to continue.</p>
@@ -533,18 +555,6 @@ export function WizardSteps() {
                 <p className="text-sm text-slate-400">Add rooms in the previous step first, then come back to upload photos.</p>
               </div>
             )}
-            <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-4">
-              {data.rooms.map((room, i) => (
-                <button
-                  className={`rounded-xl border px-3 py-2 text-left text-sm ${room.id === (currentRoom?.id || '') ? 'border-sky-400/50 bg-sky-400/10 text-white' : 'border-[color:var(--border)] bg-slate-950/40 text-slate-400'}`}
-                  key={room.id}
-                  onClick={() => setPhotoRoomId(room.id)}
-                  type="button"
-                >
-                  {room.name || `Room ${i + 1}`} · {(room.photos || []).length} 📷
-                </button>
-              ))}
-            </div>
           </div>
         )
       }
