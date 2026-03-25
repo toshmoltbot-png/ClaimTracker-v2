@@ -394,7 +394,9 @@ export function FloorPlanCanvas() {
                 {/* Room controls toolbar — visible when selected, not editing or resizing */}
                 {isSelected && !isEditing && !isResizing && (
                   <div
-                    className="absolute -top-10 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-slate-900/95 px-2 py-1 shadow-lg backdrop-blur-sm border border-slate-700/60"
+                    className={`absolute left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-slate-900/95 px-2 py-1 shadow-lg backdrop-blur-sm border border-slate-700/60 ${
+                      layout.y + layout.height + 36 > CANVAS_HEIGHT ? '-top-10' : 'top-full mt-1.5'
+                    }`}
                     onPointerDown={(e) => e.stopPropagation()}
                   >
                     <button
