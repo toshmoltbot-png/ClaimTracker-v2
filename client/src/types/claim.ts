@@ -51,6 +51,7 @@ export interface DashboardData extends DynamicFields {
   insurerName: string
   adjusterName: string
   adjusterEmail: string
+  adjusterPhone: string
   dateOfLoss: string
   dateReported: string
   deductible: string
@@ -62,10 +63,13 @@ export interface DashboardData extends DynamicFields {
 export interface Room extends DynamicFields {
   id: string
   name?: string
+  roomType?: string
   dimensions?: string
   length?: number | string
   width?: number | string
   sqft?: number | string
+  sqftOverride?: number | string
+  pricePerSqft?: number | string
   notes?: string
   photos?: FileItem[]
   floorPlanX?: number | null
@@ -239,11 +243,17 @@ export interface Communication extends DynamicFields {
   person?: string
   contactPerson?: string
   contact?: string
+  commContact?: string
   summary?: string
   followUp?: string
   followUpRequired?: boolean
   followUpDate?: string
   followUpTask?: string
+  promiseMade?: boolean
+  promiseFulfilled?: boolean
+  promisedAmount?: number
+  promisedByDate?: string
+  commitments?: string
   files?: FileItem[]
 }
 
@@ -290,6 +300,9 @@ export interface Payment extends DynamicFields {
   payer?: string
   type?: string
   notes?: string
+  coverageType?: string
+  checkNumber?: string
+  depreciation?: number
 }
 
 export interface TimelineEvent extends DynamicFields {
@@ -421,6 +434,7 @@ export function createDefaultClaimData(): ClaimData {
       insurerName: '',
       adjusterName: '',
       adjusterEmail: '',
+      adjusterPhone: '',
       dateOfLoss: '',
       dateReported: '',
       deductible: '',

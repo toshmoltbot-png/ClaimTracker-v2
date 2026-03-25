@@ -39,6 +39,9 @@ export const CLAIM_TYPE_OPTIONS: Array<{ value: ClaimType; label: string }> = [
   { value: 'water', label: 'Water Damage' },
   { value: 'fire', label: 'Fire' },
   { value: 'storm', label: 'Storm' },
+  { value: 'wind_hail', label: 'Wind / Hail' },
+  { value: 'theft', label: 'Theft' },
+  { value: 'vandalism', label: 'Vandalism' },
   { value: 'other', label: 'Other' },
 ]
 
@@ -644,11 +647,17 @@ export function createCommunicationDraft(): Communication {
     type: 'phone',
     party: 'adjuster',
     person: '',
+    commContact: '',
     summary: '',
     followUpRequired: false,
     followUpDate: '',
     followUpTask: '',
     followUp: '',
+    promiseMade: false,
+    promiseFulfilled: false,
+    promisedAmount: 0,
+    promisedByDate: '',
+    commitments: '',
     files: [],
   }
 }
@@ -728,6 +737,8 @@ export function normalizeContractorDraft(contractor: Contractor): Contractor {
   }
 }
 
+export const PAYMENT_COVERAGE_TYPE_OPTIONS = ['Dwelling', 'Contents', 'Mitigation', 'ALE', 'Multiple'] as const
+
 export function createPaymentDraft(): Payment {
   return {
     id: crypto.randomUUID(),
@@ -737,6 +748,9 @@ export function createPaymentDraft(): Payment {
     amount: 0,
     type: 'advance',
     notes: '',
+    coverageType: '',
+    checkNumber: '',
+    depreciation: 0,
   }
 }
 
