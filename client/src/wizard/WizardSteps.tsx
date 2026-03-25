@@ -571,26 +571,24 @@ export function WizardSteps() {
         const totalPhotos = data.rooms.reduce((sum, r) => sum + (r.photos || []).length, 0)
         const roomsWithoutPhotos = data.rooms.filter((r) => (r.photos || []).length === 0)
 
-        // Detect duplicates by filename+size or by identical storage path
+        // Detect duplicates by original filename (the user-facing name before upload)
+        // Storage paths are timestamped so always unique — useless for dupe detection
         const photoFingerprints = new Map<string, Array<{ roomId: string; roomName: string; photoKey: string }>>()
         for (const room of data.rooms) {
           for (const photo of room.photos || []) {
-            const name = (photo.name || photo.filename || '').toLowerCase()
-            const size = photo.size || 0
-            const fp = photo.path || (name && size ? `${name}|${size}` : '')
-            if (!fp) continue
+            const name = (photo.name || photo.filename || '').toLowerCase().trim()
+            if (!name) continue
             const photoKey = String(photo.id || photo.url || photo.path)
-            if (!photoFingerprints.has(fp)) photoFingerprints.set(fp, [])
-            photoFingerprints.get(fp)!.push({ roomId: String(room.id), roomName: room.name || 'Untitled', photoKey })
+            if (!photoFingerprints.has(name)) photoFingerprints.set(name, [])
+            photoFingerprints.get(name)!.push({ roomId: String(room.id), roomName: room.name || 'Untitled', photoKey })
           }
         }
         const duplicateKeys = new Set<string>()
-        const duplicateGroups: Array<{ name: string; rooms: string[] }> = []
+        let duplicateCount = 0
         for (const [, entries] of photoFingerprints) {
           if (entries.length > 1) {
+            duplicateCount++
             for (const e of entries) duplicateKeys.add(e.photoKey)
-            const firstName = entries[0]?.roomName || ''
-            duplicateGroups.push({ name: firstName, rooms: entries.map((e) => e.roomName) })
           }
         }
 
@@ -642,10 +640,10 @@ export function WizardSteps() {
               </div>
             )}
 
-            {duplicateGroups.length > 0 && (
+            {duplicateCount > 0 && (
               <div className="rounded-2xl border border-rose-400/30 bg-rose-400/5 px-5 py-4">
-                <p className="text-sm font-medium text-rose-300">⚠ {duplicateGroups.length} possible duplicate{duplicateGroups.length === 1 ? '' : 's'} detected</p>
-                <p className="mt-1 text-xs text-slate-400">Same file uploaded to multiple rooms, or the same photo appears twice. Duplicates are highlighted with a red border below — delete or move them.</p>
+                <p className="text-sm font-medium text-rose-300">⚠ {duplicateCount} possible duplicate{duplicateCount === 1 ? '' : 's'} detected ({duplicateKeys.size} photos)</p>
+                <p className="mt-1 text-xs text-slate-400">Photos with the same filename appear more than once. Look for the red "DUPE" badge below — delete the extra or move it if it's in the wrong room.</p>
               </div>
             )}
 
