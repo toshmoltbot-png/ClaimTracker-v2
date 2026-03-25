@@ -572,10 +572,18 @@ export function WizardSteps() {
           <div className="space-y-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-white">Quick pre-screen</h3>
-                <p className="mt-2 text-sm text-slate-300">Review the photos we found and assign an AI mode before launching AI Builder.</p>
+                <h3 className="text-lg font-semibold text-white">Photo pre-screen</h3>
+                <p className="mt-2 text-sm leading-7 text-slate-300">
+                  Tell the AI how to analyze each photo. Click a photo to cycle through modes:
+                </p>
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-sm text-slate-300"><span className="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-xs font-semibold text-sky-100">ROOM_VIEW</span> — Wide shot of the room. AI identifies all visible damage and affected areas.</p>
+                  <p className="text-sm text-slate-300"><span className="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-xs font-semibold text-sky-100">ITEM_VIEW</span> — Close-up of a specific item. AI extracts item details, condition, and replacement cost.</p>
+                  <p className="text-sm text-slate-300"><span className="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-xs font-semibold text-sky-100">FOCUSED_VIEW</span> — Zoomed in on specific damage (cracks, stains, mold). AI documents the damage evidence.</p>
+                </div>
+                <p className="mt-3 text-xs text-slate-500">Don't worry about getting this perfect — you can change modes later in AI Builder. Skip this step to use automatic defaults.</p>
               </div>
-              <button className="button-primary" onClick={applyPreScreen} type="button">
+              <button className="button-primary flex-shrink-0" onClick={applyPreScreen} type="button">
                 Apply to AI Builder
               </button>
             </div>
@@ -584,15 +592,16 @@ export function WizardSteps() {
                 const mode = preScreenModes[entry.id] || (entry.roomId ? 'ROOM_VIEW' : 'ITEM_VIEW')
                 return (
                   <button
-                    className="overflow-hidden rounded-3xl border border-[color:var(--border)] bg-slate-950/35 text-left"
+                    className="overflow-hidden rounded-3xl border border-[color:var(--border)] bg-slate-950/35 text-left transition hover:border-sky-400/40"
                     key={entry.id}
                     onClick={() => setPreScreenModes((current) => ({ ...current, [entry.id]: cycleMode(mode) }))}
+                    title="Click to change analysis mode"
                     type="button"
                   >
                     <img alt={entry.name} className="aspect-video w-full object-cover" src={entry.previewUrl} />
                     <div className="space-y-2 px-4 py-4">
                       <p className="truncate text-sm font-semibold text-white">{entry.name}</p>
-                      <p className="text-xs text-slate-400">{entry.roomName || 'Unassigned'}</p>
+                      <p className="text-xs text-slate-400">{entry.roomName || 'Unassigned'} · click to change mode</p>
                       <span className="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-100">{mode}</span>
                     </div>
                   </button>
