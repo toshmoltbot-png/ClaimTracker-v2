@@ -19,7 +19,8 @@ export function FloorPlanCanvas() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const floorPlan = ensureFloorPlanSettings(data.floorPlan)
-  const scale = useMemo(() => floorPlan.scale || computeFloorPlanScale(CANVAS_WIDTH, CANVAS_HEIGHT, data.rooms), [data.rooms, floorPlan.scale])
+  // Always recompute scale from room dimensions — never use a stale persisted value
+  const scale = useMemo(() => computeFloorPlanScale(CANVAS_WIDTH, CANVAS_HEIGHT, data.rooms), [data.rooms])
   const layouts = useMemo(() => buildFloorPlanRooms(CANVAS_WIDTH, CANVAS_HEIGHT, data.rooms, { ...floorPlan, scale }), [data.rooms, floorPlan, scale])
 
   // Compute max zIndex for "bring to front"

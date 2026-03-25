@@ -462,18 +462,26 @@ export function computeFloorPlanScale(containerWidth: number, containerHeight: n
   const padding = 32
   const usableWidth = Math.max(200, containerWidth - padding)
   const usableHeight = Math.max(240, containerHeight - padding)
-  const maxRoomDim = Math.max(
-    10,
-    ...(rooms || []).map((room) => {
-      const dims = getRoomDimensions(room)
-      return Math.max(dims.length, dims.width)
-    }),
-  )
-  let scale = 20
-  if (maxRoomDim * scale > Math.min(usableWidth, usableHeight) * 0.8) {
-    scale = Math.floor((Math.min(usableWidth, usableHeight) * 0.8) / maxRoomDim)
+
+  // Find the largest single-room dimensions (width and height independently)
+  let maxWidth = 10
+  let maxHeight = 10
+  for (const room of rooms || []) {
+    const dims = getRoomDimensions(room)
+    // Account for rotation: the room may be rotated 90°, swapping width/height
+    const rotation = Number(room.floorPlanRotation) || 0
+    const isRotated = rotation === 90 || rotation === 270
+    const w = isRotated ? dims.length : dims.width
+    const h = isRotated ? dims.width : dims.length
+    maxWidth = Math.max(maxWidth, w)
+    maxHeight = Math.max(maxHeight, h)
   }
-  return Math.max(8, Math.min(24, scale || 20))
+
+  // Scale must fit the largest room in BOTH axes (with 80% margin for other rooms)
+  const scaleByWidth = Math.floor((usableWidth * 0.8) / maxWidth)
+  const scaleByHeight = Math.floor((usableHeight * 0.8) / maxHeight)
+  const scale = Math.min(scaleByWidth, scaleByHeight, 24)
+  return Math.max(6, scale || 12)
 }
 
 export function snapFloorPlanPoint(x: number, y: number, scale: number, enabled: boolean) {
@@ -486,7 +494,8 @@ export function snapFloorPlanPoint(x: number, y: number, scale: number, enabled:
 }
 
 export function buildFloorPlanRooms(containerWidth: number, containerHeight: number, rooms: Room[], floorPlan?: FloorPlan | null): FloorPlanRoomLayout[] {
-  const scale = ensureFloorPlanSettings(floorPlan).scale || computeFloorPlanScale(containerWidth, containerHeight, rooms)
+  // Always compute scale from room dimensions to prevent overflow
+  const scale = computeFloorPlanScale(containerWidth, containerHeight, rooms)
   const padding = 18
   const gap = 18
   let currentX = padding
