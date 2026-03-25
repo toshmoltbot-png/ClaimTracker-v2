@@ -50,6 +50,7 @@ interface ResizeState {
   origWidth: number
   origCenterX: number // original center in canvas px
   origCenterY: number
+  isRotated: boolean // whether width/length are visually swapped
 }
 
 const HANDLE_CURSORS: Record<ResizeHandle, string> = {
@@ -203,6 +204,7 @@ export function FloorPlanCanvas() {
     const layout = layouts.find((l) => l.roomId === roomId)
     if (!room || !layout) return
     const dims = getRoomDimensions(room)
+    const rotation = Number(room.floorPlanRotation) || 0
     const { cx, cy } = getCanvasCoords(event)
     setResizeState({
       roomId,
@@ -213,6 +215,7 @@ export function FloorPlanCanvas() {
       origWidth: dims.width,
       origCenterX: layout.centerX,
       origCenterY: layout.centerY,
+      isRotated: rotation === 90 || rotation === 270,
     })
     ;(event.target as HTMLElement).setPointerCapture(event.pointerId)
   }
@@ -234,49 +237,78 @@ export function FloorPlanCanvas() {
 
     if (isCorner) {
       // Corner handles: proportional resize (maintain aspect ratio)
-      const aspect = resizeState.origWidth / resizeState.origLength
-      // Use the larger drag axis to drive the scale factor
+      // Work in visual space: visualW/visualH are what's on screen
+      const rot = resizeState.isRotated
+      const origVisualW = rot ? resizeState.origLength : resizeState.origWidth   // horizontal ft
+      const origVisualH = rot ? resizeState.origWidth : resizeState.origLength   // vertical ft
+      const visualAspect = origVisualW / origVisualH
+
+      // Use the larger drag axis to drive the scale
       const rawDelta = Math.abs(dxFt) > Math.abs(dyFt) ? dxFt : dyFt
-      // Determine sign: dragging "outward" from center = grow
       let sign = 1
-      if (h === 'se') sign = (rawDelta >= 0 ? 1 : -1) * (Math.abs(dxFt) > Math.abs(dyFt) ? 1 : 1)
+      if (h === 'se') sign = Math.abs(dxFt) > Math.abs(dyFt) ? (dxFt >= 0 ? 1 : -1) : (dyFt >= 0 ? 1 : -1)
       if (h === 'sw') sign = Math.abs(dxFt) > Math.abs(dyFt) ? (dxFt <= 0 ? 1 : -1) : (dyFt >= 0 ? 1 : -1)
       if (h === 'ne') sign = Math.abs(dxFt) > Math.abs(dyFt) ? (dxFt >= 0 ? 1 : -1) : (dyFt <= 0 ? 1 : -1)
       if (h === 'nw') sign = Math.abs(dxFt) > Math.abs(dyFt) ? (dxFt <= 0 ? 1 : -1) : (dyFt <= 0 ? 1 : -1)
 
       const delta = Math.abs(rawDelta) * sign
-      newLength = Math.max(MIN_ROOM_FT, resizeState.origLength + delta)
-      newWidth = Math.max(MIN_ROOM_FT, newLength * aspect)
-      // Recalculate length if width hit minimum
-      if (newWidth <= MIN_ROOM_FT) {
-        newWidth = MIN_ROOM_FT
-        newLength = Math.max(MIN_ROOM_FT, newWidth / aspect)
+      let newVisualH = Math.max(MIN_ROOM_FT, origVisualH + delta)
+      let newVisualW = Math.max(MIN_ROOM_FT, newVisualH * visualAspect)
+      if (newVisualW <= MIN_ROOM_FT) {
+        newVisualW = MIN_ROOM_FT
+        newVisualH = Math.max(MIN_ROOM_FT, newVisualW / visualAspect)
       }
 
-      // Shift center based on which corner is anchored (opposite corner stays put)
-      const dw = (newWidth - resizeState.origWidth) * scale
-      const dl = (newLength - resizeState.origLength) * scale
+      // Map back to data fields
+      newWidth = rot ? newVisualH : newVisualW
+      newLength = rot ? newVisualW : newVisualH
+
+      // Shift center based on which corner is anchored
+      const dw = (newVisualW - origVisualW) * scale  // horizontal px delta
+      const dl = (newVisualH - origVisualH) * scale   // vertical px delta
       if (h === 'se') { newCenterX += dw / 2; newCenterY += dl / 2 }
       if (h === 'sw') { newCenterX -= dw / 2; newCenterY += dl / 2 }
       if (h === 'ne') { newCenterX += dw / 2; newCenterY -= dl / 2 }
       if (h === 'nw') { newCenterX -= dw / 2; newCenterY -= dl / 2 }
     } else {
       // Edge handles: stretch in one direction only
+      // When rotated 90/270, horizontal drag changes length and vertical changes width
+      const rot = resizeState.isRotated
       if (h === 'e') {
-        newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth + dxFt)
-        newCenterX = resizeState.origCenterX + (newWidth - resizeState.origWidth) * scale / 2
+        if (rot) {
+          newLength = Math.max(MIN_ROOM_FT, resizeState.origLength + dxFt)
+          newCenterX = resizeState.origCenterX + (newLength - resizeState.origLength) * scale / 2
+        } else {
+          newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth + dxFt)
+          newCenterX = resizeState.origCenterX + (newWidth - resizeState.origWidth) * scale / 2
+        }
       }
       if (h === 'w') {
-        newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth - dxFt)
-        newCenterX = resizeState.origCenterX - (newWidth - resizeState.origWidth) * scale / 2
+        if (rot) {
+          newLength = Math.max(MIN_ROOM_FT, resizeState.origLength - dxFt)
+          newCenterX = resizeState.origCenterX - (newLength - resizeState.origLength) * scale / 2
+        } else {
+          newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth - dxFt)
+          newCenterX = resizeState.origCenterX - (newWidth - resizeState.origWidth) * scale / 2
+        }
       }
       if (h === 's') {
-        newLength = Math.max(MIN_ROOM_FT, resizeState.origLength + dyFt)
-        newCenterY = resizeState.origCenterY + (newLength - resizeState.origLength) * scale / 2
+        if (rot) {
+          newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth + dyFt)
+          newCenterY = resizeState.origCenterY + (newWidth - resizeState.origWidth) * scale / 2
+        } else {
+          newLength = Math.max(MIN_ROOM_FT, resizeState.origLength + dyFt)
+          newCenterY = resizeState.origCenterY + (newLength - resizeState.origLength) * scale / 2
+        }
       }
       if (h === 'n') {
-        newLength = Math.max(MIN_ROOM_FT, resizeState.origLength - dyFt)
-        newCenterY = resizeState.origCenterY - (newLength - resizeState.origLength) * scale / 2
+        if (rot) {
+          newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth - dyFt)
+          newCenterY = resizeState.origCenterY - (newWidth - resizeState.origWidth) * scale / 2
+        } else {
+          newLength = Math.max(MIN_ROOM_FT, resizeState.origLength - dyFt)
+          newCenterY = resizeState.origCenterY - (newLength - resizeState.origLength) * scale / 2
+        }
       }
     }
 
