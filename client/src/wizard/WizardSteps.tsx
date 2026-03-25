@@ -82,6 +82,7 @@ export function WizardSteps() {
   const setActiveTab = useUIStore((state) => state.setActiveTab)
   const [roomDraft, setRoomDraft] = useState<Room>(buildRoomDraft())
   const [photoRoomId, setPhotoRoomId] = useState<string>('')
+  const [uploadingCount, setUploadingCount] = useState(0)
   const [tipDismissed, setTipDismissed] = useState(false)
   const [preScreenModes, setPreScreenModes] = useState<Record<string, AnalysisMode>>({})
   const [policyUploadStatus, setPolicyUploadStatus] = useState<string>('')
@@ -197,6 +198,7 @@ export function WizardSteps() {
     }
     const room = data.rooms.find((entry) => String(entry.id) === photoRoomId)
     if (!room) return
+    setUploadingCount(files.length)
     const stored = await Promise.all(
       files.map(async ({ file }) => {
         try {
@@ -214,6 +216,7 @@ export function WizardSteps() {
         }
       }),
     ).then((results) => results.filter((r): r is FileItem => r !== null))
+    setUploadingCount(0)
     updateData((current) => ({
       ...current,
       rooms: current.rooms.map((entry) => (
@@ -487,12 +490,18 @@ export function WizardSteps() {
                       </div>
                       <button className="button-secondary text-sm" disabled={!hasNextRoom} onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">→</button>
                     </div>
-                    <span className="rounded-full bg-sky-400/15 px-3 py-1 text-sm font-semibold text-sky-200">{roomIndex + 1} of {data.rooms.length} · {(currentRoom?.photos || []).length} 📷</span>
+                    <span className="rounded-full bg-sky-400/15 px-3 py-1 text-sm font-semibold text-sky-200">
+                      {roomIndex + 1} of {data.rooms.length} · {(currentRoom?.photos || []).length} 📷
+                      {uploadingCount > 0 && <span className="ml-1 text-amber-300">({uploadingCount} uploading…)</span>}
+                    </span>
                   </div>
                   <PhotoUploader key={photoRoomId} label={`Upload photos for ${currentRoom?.name || 'this room'}`} onFilesSelected={(files) => void uploadRoomPhotos(files)} />
                   {(currentRoom?.photos || []).length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-sm font-medium text-slate-300">{(currentRoom.photos || []).length} photo{(currentRoom.photos || []).length === 1 ? '' : 's'} uploaded</p>
+                      <p className="text-sm font-medium text-slate-300">
+                        {(currentRoom.photos || []).length} photo{(currentRoom.photos || []).length === 1 ? '' : 's'} uploaded
+                        {uploadingCount > 0 && <span className="ml-1 text-amber-300">· {uploadingCount} uploading…</span>}
+                      </p>
                       <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
                         {(currentRoom.photos || []).map((photo) => (
                           <div className="group relative" key={String(photo.id || photo.url || photo.path)}>
