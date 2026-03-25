@@ -490,12 +490,32 @@ export function WizardSteps() {
                     <p className="text-sm font-medium text-slate-300">{(currentRoom.photos || []).length} photo{(currentRoom.photos || []).length === 1 ? '' : 's'} uploaded</p>
                     <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
                       {(currentRoom.photos || []).map((photo) => (
-                        <img
-                          alt={photo.name || photo.filename || currentRoom.name || 'Room photo'}
-                          className="aspect-square rounded-xl object-cover"
-                          key={String(photo.id || photo.url || photo.path)}
-                          src={photo.url || photo.dataUrl || photo.data || ''}
-                        />
+                        <div className="group relative" key={String(photo.id || photo.url || photo.path)}>
+                          <img
+                            alt={photo.name || photo.filename || currentRoom.name || 'Room photo'}
+                            className="aspect-square rounded-xl object-cover"
+                            src={photo.url || photo.dataUrl || photo.data || ''}
+                          />
+                          <button
+                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100"
+                            onClick={() => {
+                              const photoKey = String(photo.id || photo.url || photo.path)
+                              updateData((current) => ({
+                                ...current,
+                                rooms: current.rooms.map((r) =>
+                                  String(r.id) === String(currentRoom.id)
+                                    ? { ...r, photos: (r.photos || []).filter((p) => String(p.id || p.url || p.path) !== photoKey) }
+                                    : r
+                                ),
+                              }))
+                              pushToast('Photo removed.', 'info')
+                            }}
+                            title="Remove photo"
+                            type="button"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
