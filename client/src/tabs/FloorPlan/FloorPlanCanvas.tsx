@@ -203,26 +203,54 @@ export function FloorPlanCanvas() {
     let newCenterX = resizeState.origCenterX
     let newCenterY = resizeState.origCenterY
     const h = resizeState.handle
+    const isCorner = h === 'ne' || h === 'nw' || h === 'se' || h === 'sw'
 
-    // East edges: expand width rightward
-    if (h === 'e' || h === 'ne' || h === 'se') {
-      newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth + dxFt)
-      newCenterX = resizeState.origCenterX + (newWidth - resizeState.origWidth) * scale / 2
-    }
-    // West edges: expand width leftward
-    if (h === 'w' || h === 'nw' || h === 'sw') {
-      newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth - dxFt)
-      newCenterX = resizeState.origCenterX - (newWidth - resizeState.origWidth) * scale / 2
-    }
-    // South edges: expand length downward
-    if (h === 's' || h === 'se' || h === 'sw') {
-      newLength = Math.max(MIN_ROOM_FT, resizeState.origLength + dyFt)
-      newCenterY = resizeState.origCenterY + (newLength - resizeState.origLength) * scale / 2
-    }
-    // North edges: expand length upward
-    if (h === 'n' || h === 'ne' || h === 'nw') {
-      newLength = Math.max(MIN_ROOM_FT, resizeState.origLength - dyFt)
-      newCenterY = resizeState.origCenterY - (newLength - resizeState.origLength) * scale / 2
+    if (isCorner) {
+      // Corner handles: proportional resize (maintain aspect ratio)
+      const aspect = resizeState.origWidth / resizeState.origLength
+      // Use the larger drag axis to drive the scale factor
+      const rawDelta = Math.abs(dxFt) > Math.abs(dyFt) ? dxFt : dyFt
+      // Determine sign: dragging "outward" from center = grow
+      let sign = 1
+      if (h === 'se') sign = (rawDelta >= 0 ? 1 : -1) * (Math.abs(dxFt) > Math.abs(dyFt) ? 1 : 1)
+      if (h === 'sw') sign = Math.abs(dxFt) > Math.abs(dyFt) ? (dxFt <= 0 ? 1 : -1) : (dyFt >= 0 ? 1 : -1)
+      if (h === 'ne') sign = Math.abs(dxFt) > Math.abs(dyFt) ? (dxFt >= 0 ? 1 : -1) : (dyFt <= 0 ? 1 : -1)
+      if (h === 'nw') sign = Math.abs(dxFt) > Math.abs(dyFt) ? (dxFt <= 0 ? 1 : -1) : (dyFt <= 0 ? 1 : -1)
+
+      const delta = Math.abs(rawDelta) * sign
+      newLength = Math.max(MIN_ROOM_FT, resizeState.origLength + delta)
+      newWidth = Math.max(MIN_ROOM_FT, newLength * aspect)
+      // Recalculate length if width hit minimum
+      if (newWidth <= MIN_ROOM_FT) {
+        newWidth = MIN_ROOM_FT
+        newLength = Math.max(MIN_ROOM_FT, newWidth / aspect)
+      }
+
+      // Shift center based on which corner is anchored (opposite corner stays put)
+      const dw = (newWidth - resizeState.origWidth) * scale
+      const dl = (newLength - resizeState.origLength) * scale
+      if (h === 'se') { newCenterX += dw / 2; newCenterY += dl / 2 }
+      if (h === 'sw') { newCenterX -= dw / 2; newCenterY += dl / 2 }
+      if (h === 'ne') { newCenterX += dw / 2; newCenterY -= dl / 2 }
+      if (h === 'nw') { newCenterX -= dw / 2; newCenterY -= dl / 2 }
+    } else {
+      // Edge handles: stretch in one direction only
+      if (h === 'e') {
+        newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth + dxFt)
+        newCenterX = resizeState.origCenterX + (newWidth - resizeState.origWidth) * scale / 2
+      }
+      if (h === 'w') {
+        newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth - dxFt)
+        newCenterX = resizeState.origCenterX - (newWidth - resizeState.origWidth) * scale / 2
+      }
+      if (h === 's') {
+        newLength = Math.max(MIN_ROOM_FT, resizeState.origLength + dyFt)
+        newCenterY = resizeState.origCenterY + (newLength - resizeState.origLength) * scale / 2
+      }
+      if (h === 'n') {
+        newLength = Math.max(MIN_ROOM_FT, resizeState.origLength - dyFt)
+        newCenterY = resizeState.origCenterY - (newLength - resizeState.origLength) * scale / 2
+      }
     }
 
     // Round to 0.1 ft
