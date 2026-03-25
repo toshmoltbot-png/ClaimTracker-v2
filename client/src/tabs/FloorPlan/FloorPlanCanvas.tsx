@@ -391,39 +391,41 @@ export function FloorPlanCanvas() {
                 {/* Resize handles — visible when selected */}
                 {(isSelected || isResizing) && !isEditing && renderResizeHandles(layout)}
 
-                {/* Room controls toolbar — visible when selected, not editing or resizing */}
-                {isSelected && !isEditing && !isResizing && (
-                  <div
-                    className={`absolute left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-slate-900/95 px-2 py-1 shadow-lg backdrop-blur-sm border border-slate-700/60 ${
-                      layout.y + layout.height + 36 > CANVAS_HEIGHT ? '-top-10' : 'top-full mt-1.5'
-                    }`}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      className="rounded px-2 py-0.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition-colors"
-                      onClick={() => handleRotate(layout.roomId)}
-                      title="Rotate 90°"
+                {/* Room controls toolbar — vertical, right side (or left if near edge) */}
+                {isSelected && !isEditing && !isResizing && (() => {
+                  const toolbarW = 36
+                  const placeRight = layout.x + layout.width + toolbarW + 8 < CANVAS_WIDTH
+                  return (
+                    <div
+                      className={`absolute top-0 z-50 flex flex-col items-center gap-1 rounded-lg bg-slate-900/95 px-1.5 py-2 shadow-lg backdrop-blur-sm border border-slate-700/60 ${
+                        placeRight ? 'left-full ml-1.5' : 'right-full mr-1.5'
+                      }`}
+                      onPointerDown={(e) => e.stopPropagation()}
                     >
-                      ↻ 90°
-                    </button>
-                    <span className="text-slate-600">|</span>
-                    <button
-                      className="rounded px-2 py-0.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition-colors"
-                      onClick={() => handleBringToFront(layout.roomId)}
-                      title="Bring to front"
-                    >
-                      ▲ Front
-                    </button>
-                    <span className="text-slate-600">|</span>
-                    <button
-                      className="rounded px-2 py-0.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition-colors"
-                      onClick={() => handleSendToBack(layout.roomId)}
-                      title="Send to back"
-                    >
-                      ▼ Back
-                    </button>
-                  </div>
-                )}
+                      <button
+                        className="rounded p-1 text-sm text-sky-300 hover:bg-sky-500/20 transition-colors leading-none"
+                        onClick={() => handleRotate(layout.roomId)}
+                        title="Rotate 90°"
+                      >
+                        ↻
+                      </button>
+                      <button
+                        className="rounded p-1 text-sm text-sky-300 hover:bg-sky-500/20 transition-colors leading-none"
+                        onClick={() => handleBringToFront(layout.roomId)}
+                        title="Bring to front"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        className="rounded p-1 text-sm text-sky-300 hover:bg-sky-500/20 transition-colors leading-none"
+                        onClick={() => handleSendToBack(layout.roomId)}
+                        title="Send to back"
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  )
+                })()}
 
                 {/* Dimension edit popover — visible on double-click */}
                 {isEditing && (
