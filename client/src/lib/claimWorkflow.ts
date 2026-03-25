@@ -143,6 +143,8 @@ export interface FloorPlanRoomLayout {
   dimensionsLabel: string
   sqft: number
   visible: boolean
+  rotation: number
+  zIndex: number
 }
 
 export interface PhotoLibraryEntry {
@@ -509,14 +511,18 @@ export function buildFloorPlanRooms(containerWidth: number, containerHeight: num
     if (!hasStoredPosition) {
       currentY += height + gap
     }
+    const rotation = parseNumber(room.floorPlanRotation) || 0
+    const isRotated = rotation === 90 || rotation === 270
+    const renderWidth = isRotated ? height : width
+    const renderHeight = isRotated ? width : height
     return {
       id: `room-${room.id}`,
       roomId: room.id,
       name: String(room.name || 'Room'),
-      x: centerX - width / 2,
-      y: centerY - height / 2,
-      width,
-      height,
+      x: centerX - renderWidth / 2,
+      y: centerY - renderHeight / 2,
+      width: renderWidth,
+      height: renderHeight,
       centerX,
       centerY,
       color: getRoomColor(room.name),
@@ -524,6 +530,8 @@ export function buildFloorPlanRooms(containerWidth: number, containerHeight: num
       dimensionsLabel: dims.label,
       sqft: parseNumber(room.sqft) || Number((dims.length * dims.width).toFixed(1)),
       visible: room.floorPlanVisible !== false,
+      rotation,
+      zIndex: parseNumber(room.floorPlanZIndex) || 0,
     }
   })
 }

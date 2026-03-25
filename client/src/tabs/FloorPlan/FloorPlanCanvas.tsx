@@ -17,9 +17,14 @@ export function FloorPlanCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const floorPlan = ensureFloorPlanSettings(data.floorPlan)
   const scale = useMemo(() => floorPlan.scale || computeFloorPlanScale(CANVAS_WIDTH, CANVAS_HEIGHT, data.rooms), [data.rooms, floorPlan.scale])
   const layouts = useMemo(() => buildFloorPlanRooms(CANVAS_WIDTH, CANVAS_HEIGHT, data.rooms, { ...floorPlan, scale }), [data.rooms, floorPlan, scale])
+
+  // Compute max zIndex for "bring to front"
+  const maxZ = useMemo(() => Math.max(0, ...layouts.map((l) => l.zIndex)), [layouts])
+  const minZ = useMemo(() => Math.min(0, ...layouts.map((l) => l.zIndex)), [layouts])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -45,9 +50,32 @@ export function FloorPlanCanvas() {
       context.lineTo(canvas.width, y + 0.5)
       context.stroke()
     }
+  }, [layouts, scale])
 
-    // Connection lines removed — they added visual noise without meaning
-  }, [floorPlan.showConnections, layouts, scale])
+  function updateRoom(roomId: string, patch: Record<string, unknown>) {
+    updateData((current) => ({
+      ...current,
+      rooms: current.rooms.map((room) =>
+        String(room.id) === roomId ? { ...room, ...patch } : room,
+      ),
+    }))
+  }
+
+  function handleRotate(roomId: string) {
+    const room = data.rooms.find((r) => String(r.id) === roomId)
+    if (!room) return
+    const current = Number(room.floorPlanRotation) || 0
+    const next = (current + 90) % 360
+    updateRoom(roomId, { floorPlanRotation: next })
+  }
+
+  function handleBringToFront(roomId: string) {
+    updateRoom(roomId, { floorPlanZIndex: maxZ + 1 })
+  }
+
+  function handleSendToBack(roomId: string) {
+    updateRoom(roomId, { floorPlanZIndex: minZ - 1 })
+  }
 
   function handlePointerDown(roomId: string, event: React.PointerEvent<HTMLDivElement>) {
     const layout = layouts.find((entry) => entry.roomId === roomId)
@@ -57,6 +85,7 @@ export function FloorPlanCanvas() {
     const xRatio = stageRect ? CANVAS_WIDTH / stageRect.width : 1
     const yRatio = stageRect ? CANVAS_HEIGHT / stageRect.height : 1
     setDraggingId(roomId)
+    setSelectedId(roomId)
     setDragOffset({
       x: (event.clientX - roomRect.left) * xRatio,
       y: (event.clientY - roomRect.top) * yRatio,
@@ -95,44 +124,90 @@ export function FloorPlanCanvas() {
     setDraggingId(null)
   }
 
+  function handleStageClick(event: React.PointerEvent<HTMLDivElement>) {
+    // Deselect if clicking on the stage background (canvas)
+    if (event.target === event.currentTarget || (event.target as HTMLElement).tagName === 'CANVAS') {
+      setSelectedId(null)
+    }
+  }
+
   return (
     <section className="panel relative overflow-hidden px-4 py-4">
       <div
         className="relative mx-auto h-[560px] w-full max-w-[960px] touch-none overflow-hidden rounded-2xl border border-[color:var(--border)]"
+        onPointerDown={handleStageClick}
         onPointerLeave={stopDragging}
         onPointerMove={handlePointerMove}
         onPointerUp={stopDragging}
       >
         <canvas className="absolute inset-0 h-full w-full" height={CANVAS_HEIGHT} ref={canvasRef} width={CANVAS_WIDTH} />
-        {layouts.map((layout) => {
-          if (!layout.visible) return null
-          const room = data.rooms.find((entry) => String(entry.id) === layout.roomId)
-          const dims = room ? getRoomDimensions(room) : { length: 0, width: 0 }
-          return (
-            <div
-              className={`absolute select-none rounded-2xl border border-slate-950/80 shadow-[0_18px_40px_rgba(2,6,23,0.45)] ${draggingId === layout.roomId ? 'ring-2 ring-sky-300/70' : ''}`}
-              key={layout.id}
-              onPointerDown={(event) => handlePointerDown(layout.roomId, event)}
-              style={{
-                left: `${layout.x}px`,
-                top: `${layout.y}px`,
-                width: `${layout.width}px`,
-                height: `${layout.height}px`,
-                backgroundColor: `${layout.color}66`,
-                borderColor: layout.color,
-              }}
-            >
-              <div className="flex h-full flex-col justify-between p-3">
-                {floorPlan.showLabels !== false ? <div className="text-sm font-semibold text-white">{layout.label}</div> : <span />}
-                {floorPlan.showDimensions !== false ? (
-                  <div className="text-xs text-slate-100">
-                    {dims.length.toFixed(1)} x {dims.width.toFixed(1)} ft
+        {layouts
+          .filter((layout) => layout.visible)
+          .sort((a, b) => a.zIndex - b.zIndex)
+          .map((layout) => {
+            const room = data.rooms.find((entry) => String(entry.id) === layout.roomId)
+            const dims = room ? getRoomDimensions(room) : { length: 0, width: 0 }
+            const isSelected = selectedId === layout.roomId
+            return (
+              <div
+                className={`absolute select-none rounded-2xl border border-slate-950/80 shadow-[0_18px_40px_rgba(2,6,23,0.45)] transition-shadow ${
+                  draggingId === layout.roomId ? 'ring-2 ring-sky-300/70' : ''
+                } ${isSelected && !draggingId ? 'ring-2 ring-sky-400/90' : ''}`}
+                key={layout.id}
+                onPointerDown={(event) => handlePointerDown(layout.roomId, event)}
+                style={{
+                  left: `${layout.x}px`,
+                  top: `${layout.y}px`,
+                  width: `${layout.width}px`,
+                  height: `${layout.height}px`,
+                  backgroundColor: `${layout.color}66`,
+                  borderColor: layout.color,
+                  zIndex: layout.zIndex + 100, // offset so rooms are always above canvas
+                }}
+              >
+                <div className="flex h-full flex-col justify-between p-3">
+                  {floorPlan.showLabels !== false ? <div className="text-sm font-semibold text-white">{layout.label}</div> : <span />}
+                  {floorPlan.showDimensions !== false ? (
+                    <div className="text-xs text-slate-100">
+                      {dims.length.toFixed(1)} x {dims.width.toFixed(1)} ft
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Room controls — visible when selected */}
+                {isSelected && (
+                  <div
+                    className="absolute -top-10 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-slate-900/95 px-2 py-1 shadow-lg backdrop-blur-sm border border-slate-700/60"
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      className="rounded px-2 py-0.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition-colors"
+                      onClick={() => handleRotate(layout.roomId)}
+                      title="Rotate 90°"
+                    >
+                      ↻ 90°
+                    </button>
+                    <span className="text-slate-600">|</span>
+                    <button
+                      className="rounded px-2 py-0.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition-colors"
+                      onClick={() => handleBringToFront(layout.roomId)}
+                      title="Bring to front"
+                    >
+                      ▲ Front
+                    </button>
+                    <span className="text-slate-600">|</span>
+                    <button
+                      className="rounded px-2 py-0.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition-colors"
+                      onClick={() => handleSendToBack(layout.roomId)}
+                      title="Send to back"
+                    >
+                      ▼ Back
+                    </button>
                   </div>
-                ) : null}
+                )}
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
       </div>
     </section>
   )

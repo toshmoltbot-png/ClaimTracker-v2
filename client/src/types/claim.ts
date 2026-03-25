@@ -75,6 +75,7 @@ export interface Room extends DynamicFields {
   floorPlanX?: number | null
   floorPlanY?: number | null
   floorPlanRotation?: number | null
+  floorPlanZIndex?: number | null
   floorPlanVisible?: boolean
 }
 
