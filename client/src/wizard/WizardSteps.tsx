@@ -928,13 +928,12 @@ export function WizardSteps() {
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-
-        <div ref={(el) => { contentRef.current = el }} className="flex-1 p-5 sm:p-6">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div ref={(el) => { contentRef.current = el }} className="flex-1 overflow-y-auto p-5 sm:p-6">
           {renderStep()}
         </div>
 
-        <div className="flex flex-shrink-0 items-center justify-between gap-3 border-t border-[color:var(--border)] px-5 py-3">
+        <div className="flex flex-shrink-0 items-center justify-between gap-3 border-t border-[color:var(--border)] bg-slate-900/50 px-5 py-3 backdrop-blur-md">
           <button className="button-secondary text-sm" disabled={wizard.step === 1} onClick={previousStep} type="button">
             Back
           </button>
