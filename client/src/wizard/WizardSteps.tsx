@@ -11,12 +11,14 @@ import {
   markOnboardingComplete,
   setStoredOnboardingStep,
   syncClaimReceipts,
+  formatCurrency,
+  getExpensesTotal,
   upsertExpenseEntry,
   updateRoomDimensions,
 } from '@/lib/claimWorkflow'
 import { compressImageToDataUrl, readFileAsDataUrl } from '@/lib/utils'
 import { extractPolicyText, parsePolicyFields } from '@/lib/policyParser'
-import { storeDataUrl } from '@/lib/firebase'
+import { storeDataUrl, storeMediaFile } from '@/lib/firebase'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import type { AnalysisMode, ExpenseEntry, FileItem, Receipt, Room } from '@/types/claim'
@@ -31,9 +33,11 @@ const steps = [
   'Pre-Screen',
   'Floor Plan',
   'Receipts',
+  'Contractors',
   'Expenses',
   'AI Launch',
-  'Completion',
+  'Review',
+  'Done',
 ] as const
 
 const stepTips: Partial<Record<number, string>> = {
@@ -322,7 +326,7 @@ export function WizardSteps() {
             <div className="space-y-3">
               {CLAIM_TYPE_OPTIONS.map((option) => (
                 <button
-                  className={`w-full rounded-2xl border px-4 py-4 text-left ${data.claimType === option.value ? 'border-sky-400/50 bg-sky-400/10 text-white' : 'border-[color:var(--border)] bg-slate-950/35 text-slate-300'}`}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left ${data.claimType === option.value ? 'border-sky-400/50 bg-sky-400/10 text-white' : 'border-[color:var(--border)] bg-slate-950/35 text-slate-300'}`}
                   key={option.value}
                   onClick={() => updateData((current) => ({ ...current, claimType: option.value, claim: { ...current.claim, incidentType: option.value } }))}
                   type="button"
@@ -330,6 +334,12 @@ export function WizardSteps() {
                   {option.label}
                 </button>
               ))}
+            </div>
+            <div className="lg:col-span-2">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Brief description of what happened</span>
+                <textarea className="field min-h-20" placeholder="e.g. Septic backup flooded the entire first floor on Feb 1st..." onChange={(e) => updateData((c) => ({ ...c, claim: { ...c.claim, description: e.target.value } }))} value={data.claim.description || ''} />
+              </label>
             </div>
           </div>
         )
@@ -395,7 +405,20 @@ export function WizardSteps() {
                 <span className="text-sm font-medium text-slate-200">Insurer</span>
                 <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, insurer: event.target.value }, dashboard: { ...current.dashboard, insurerName: event.target.value } }))} value={data.claim.insurer || data.dashboard.insurerName || ''} />
               </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Adjuster name</span>
+                <input className="field" onChange={(e) => updateData((c) => ({ ...c, dashboard: { ...c.dashboard, adjusterName: e.target.value } }))} value={data.dashboard.adjusterName || ''} />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Adjuster phone</span>
+                <input className="field" type="tel" onChange={(e) => updateData((c) => ({ ...c, dashboard: { ...c.dashboard, adjusterPhone: e.target.value } }))} value={data.dashboard.adjusterPhone || ''} />
+              </label>
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-sm font-medium text-slate-200">Adjuster email</span>
+                <input className="field" type="email" onChange={(e) => updateData((c) => ({ ...c, dashboard: { ...c.dashboard, adjusterEmail: e.target.value } }))} value={data.dashboard.adjusterEmail || ''} />
+              </label>
             </div>
+            <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll enter this later →</button>
           </div>
         )
       case 3:
@@ -532,17 +555,49 @@ export function WizardSteps() {
         )
       case 8:
         return (
-          <div className="space-y-6">
-            <WeatherCard address={data.dashboard.insuredAddress || data.claim.propertyAddress || ''} dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss || ''} utilityDateRanges={utilityRanges} />
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <button className="rounded-2xl border border-sky-400/25 bg-sky-400/10 px-4 py-4 text-left text-sky-50" onClick={() => quickAddExpense('Cleanup Labor', 'Initial cleanup labor', 150)} type="button">Cleanup labor</button>
-              <button className="rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-4 text-left text-amber-50" onClick={() => quickAddExpense('Utilities', 'Utility increase estimate', 35)} type="button">Utility increase</button>
-              <button className="rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 py-4 text-left text-rose-50" onClick={() => quickAddExpense('Disposal', 'Disposal / haul-off', 125)} type="button">Disposal</button>
-              <button className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-4 text-left text-emerald-50" onClick={() => quickAddExpense('Lodging', 'Temporary living expense', 180)} type="button">Living expense</button>
+          <div className="space-y-5">
+            <h3 className="text-xl font-semibold text-white">Contractor Reports</h3>
+            <p className="text-sm text-slate-300">Upload any remediation or contractor reports (ServPro, Paul Davis, etc). These strengthen your claim documentation.</p>
+            <PhotoUploader label="Upload contractor reports (PDF/image)" onFilesSelected={async (files) => {
+              for (const { file } of files) {
+                const item = { id: crypto.randomUUID(), name: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), url: '', data: null }
+                try {
+                  const uploaded = await storeMediaFile(file, { folder: 'contractor-reports' })
+                  Object.assign(item, uploaded)
+                } catch { /* store locally */ }
+                updateData((c) => ({ ...c, contractorReports: [...(c.contractorReports || []), item] }))
+              }
+              pushToast(`Uploaded ${files.length} report(s).`, 'info')
+            }} />
+            <div className="space-y-2">
+              {(data.contractorReports || []).length ? data.contractorReports.map((r) => (
+                <div className="flex items-center justify-between rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(r.id || r.name)}>
+                  <p className="truncate text-sm font-medium text-white">{r.name || 'Report'}</p>
+                  <button className="text-xs text-slate-400 hover:text-rose-400" onClick={() => updateData((c) => ({ ...c, contractorReports: c.contractorReports.filter((x) => x.id !== r.id) }))} type="button">Remove</button>
+                </div>
+              )) : <p className="text-sm text-slate-500">No reports uploaded yet. You can add these later from the Contractors tab.</p>}
             </div>
+            <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add these later →</button>
           </div>
         )
       case 9:
+        return (
+          <div className="space-y-6">
+            <h3 className="text-xl font-semibold text-white">Additional Living Expenses</h3>
+            <p className="text-sm text-slate-300">Most homeowners miss $500–$2,000+ in reimbursable expenses. Quick-add common categories below.</p>
+            <WeatherCard address={data.dashboard.insuredAddress || data.claim.propertyAddress || ''} dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss || ''} utilityDateRanges={utilityRanges} />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <button className="rounded-2xl border border-sky-400/25 bg-sky-400/10 px-4 py-4 text-left text-sky-50" onClick={() => quickAddExpense('Cleanup Labor', 'Initial cleanup labor', 150)} type="button"><span className="block font-medium">Cleanup labor</span><span className="mt-1 block text-xs opacity-70">Your hours at $25-40/hr</span></button>
+              <button className="rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-4 text-left text-amber-50" onClick={() => quickAddExpense('Utilities', 'Utility increase estimate', 35)} type="button"><span className="block font-medium">Utility increase</span><span className="mt-1 block text-xs opacity-70">Heating, electric spikes</span></button>
+              <button className="rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 py-4 text-left text-rose-50" onClick={() => quickAddExpense('Disposal', 'Disposal / haul-off', 125)} type="button"><span className="block font-medium">Disposal</span><span className="mt-1 block text-xs opacity-70">Dumpster, dump runs</span></button>
+              <button className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-4 text-left text-emerald-50" onClick={() => quickAddExpense('Lodging', 'Temporary living expense', 180)} type="button"><span className="block font-medium">Living expense</span><span className="mt-1 block text-xs opacity-70">Hotel, meals, laundry</span></button>
+              <button className="rounded-2xl border border-purple-400/25 bg-purple-400/10 px-4 py-4 text-left text-purple-50" onClick={() => quickAddExpense('Other', 'Miscellaneous expense', 50)} type="button"><span className="block font-medium">Other / Misc</span><span className="mt-1 block text-xs opacity-70">Storage, pet care, etc</span></button>
+            </div>
+            {(() => { const total = getExpensesTotal(data.expenses); return total > 0 ? <p className="text-sm font-medium text-emerald-400">Running total: {formatCurrency(total)}</p> : null })()}
+            <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add expenses later →</button>
+          </div>
+        )
+      case 10:
         return (
           <div className="grid gap-5 lg:grid-cols-[0.9fr,1.1fr]">
             <div className="rounded-3xl border border-[color:var(--border)] bg-slate-950/35 p-5">
@@ -574,14 +629,63 @@ export function WizardSteps() {
             </div>
           </div>
         )
-      case 10:
+      case 11: {
+        const itemCount = (data.contents || []).filter((i) => i.includedInClaim !== false).length
+        const totalValue = (data.contents || []).reduce((sum, i) => sum + Number(i.replacementCost || 0), 0)
+        return (
+          <div className="space-y-5">
+            <h3 className="text-xl font-semibold text-white">Review your contents inventory</h3>
+            {itemCount > 0 ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4 text-center">
+                    <p className="text-2xl font-semibold text-white">{itemCount}</p>
+                    <p className="mt-1 text-xs text-slate-400">Items found</p>
+                  </div>
+                  <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4 text-center">
+                    <p className="text-2xl font-semibold text-white">{formatCurrency(totalValue)}</p>
+                    <p className="mt-1 text-xs text-slate-400">Total value</p>
+                  </div>
+                  <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4 text-center">
+                    <p className="text-2xl font-semibold text-white">{(data.contents || []).filter((i) => i.enrichment?.revised || i.enriched).length}</p>
+                    <p className="mt-1 text-xs text-slate-400">Enriched</p>
+                  </div>
+                </div>
+                <button className="button-secondary" onClick={() => { closeWizard(); setActiveTab('contents') }} type="button">Review in Contents tab</button>
+              </>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
+                <p className="text-sm text-slate-400">No items yet. Use AI Builder to scan photos, or add items manually in the Contents tab.</p>
+                <button className="button-primary mt-4" onClick={() => { closeWizard(); setActiveTab('ai-builder') }} type="button">Open AI Builder</button>
+              </div>
+            )}
+          </div>
+        )
+      }
+      case 12:
         return (
           <div className="space-y-5">
             <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/10 px-5 py-5">
               <h3 className="text-xl font-semibold text-white">Workspace ready</h3>
               <p className="mt-2 text-sm leading-7 text-slate-200">
-                The core claim scaffolding is in place. Continue in Contents if you want to work the inventory now, or open Maximizer for strategy guidance.
+                The core claim scaffolding is in place. Review the checklist below, then continue building your claim.
               </p>
+            </div>
+            <div className="space-y-2">
+              {[
+                { label: 'Claim type set', done: !!data.claimType },
+                { label: 'Claim details filled', done: !!(data.dashboard.claimNumber || data.claim.claimNumber) },
+                { label: 'Rooms added', done: (data.rooms || []).length > 0 },
+                { label: 'Photos uploaded', done: (data.photoLibrary || []).length > 0 || (data.rooms || []).some((r) => (r.photos || []).length > 0) },
+                { label: 'AI analysis started', done: (data.aiPhotos || []).length > 0 },
+                { label: 'Contents inventory started', done: (data.contents || []).length > 0 },
+                { label: 'Expenses tracked', done: getExpensesTotal(data.expenses) > 0 },
+              ].map((item) => (
+                <div className="flex items-center gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/30 px-4 py-3" key={item.label}>
+                  <span className={item.done ? 'text-emerald-400' : 'text-slate-600'}>{item.done ? '✅' : '○'}</span>
+                  <span className={`text-sm ${item.done ? 'text-white' : 'text-slate-400'}`}>{item.label}</span>
+                </div>
+              ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <button className="button-primary" onClick={() => finish('contents')} type="button">
