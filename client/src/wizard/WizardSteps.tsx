@@ -18,7 +18,7 @@ import {
 } from '@/lib/claimWorkflow'
 import { compressImageToDataUrl, readFileAsDataUrl } from '@/lib/utils'
 import { extractPolicyText, parsePolicyFields } from '@/lib/policyParser'
-import { storeDataUrl, storeMediaFile } from '@/lib/firebase'
+import { storeDataUrl, storeMediaFile, uploadFile } from '@/lib/firebase'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import type { AnalysisMode, ExpenseEntry, FileItem, Receipt, Room } from '@/types/claim'
@@ -198,20 +198,22 @@ export function WizardSteps() {
     const room = data.rooms.find((entry) => String(entry.id) === photoRoomId)
     if (!room) return
     const stored = await Promise.all(
-      files.map(async ({ file, previewUrl }) => {
-        const uploaded = await storeDataUrl(previewUrl, { filename: file.name, folder: 'rooms' })
-        return {
-          ...uploaded,
-          id: crypto.randomUUID(),
-          name: file.name,
-          filename: file.name,
-          size: file.size,
-          type: file.type,
-          dataUrl: previewUrl,
-          roomId: room.id,
-        } satisfies FileItem
+      files.map(async ({ file }) => {
+        try {
+          const uploaded = await uploadFile(file, 'room-photos')
+          return {
+            ...uploaded,
+            id: crypto.randomUUID(),
+            filename: file.name,
+            roomId: room.id,
+          } satisfies FileItem
+        } catch (err) {
+          console.warn('Room photo upload failed:', err)
+          pushToast(`Failed to upload ${file.name}`, 'warning')
+          return null
+        }
       }),
-    )
+    ).then((results) => results.filter((r): r is FileItem => r !== null))
     updateData((current) => ({
       ...current,
       rooms: current.rooms.map((entry) => (

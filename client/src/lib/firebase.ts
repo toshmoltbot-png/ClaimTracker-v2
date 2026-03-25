@@ -90,8 +90,10 @@ export async function saveClaim(claim: ClaimData, uid = getUid()) {
 }
 
 function makeStoragePath(filename: string, folder: string) {
+  const uid = getUid()
   const safeName = filename.replaceAll(/\s+/g, '-').replaceAll(/[^a-zA-Z0-9._-]/g, '')
-  return `${folder}/${Date.now()}-${safeName}`
+  // Match v1 path: users/{uid}/{folder}/{timestamp}-{filename}
+  return uid ? `users/${uid}/${folder}/${Date.now()}-${safeName}` : `${folder}/${Date.now()}-${safeName}`
 }
 
 export async function uploadFile(file: File, folder = 'uploads'): Promise<FileItem> {
