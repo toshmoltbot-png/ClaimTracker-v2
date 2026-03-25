@@ -571,6 +571,29 @@ export function WizardSteps() {
         const totalPhotos = data.rooms.reduce((sum, r) => sum + (r.photos || []).length, 0)
         const roomsWithoutPhotos = data.rooms.filter((r) => (r.photos || []).length === 0)
 
+        // Detect duplicates by filename+size or by identical storage path
+        const photoFingerprints = new Map<string, Array<{ roomId: string; roomName: string; photoKey: string }>>()
+        for (const room of data.rooms) {
+          for (const photo of room.photos || []) {
+            const name = (photo.name || photo.filename || '').toLowerCase()
+            const size = photo.size || 0
+            const fp = photo.path || (name && size ? `${name}|${size}` : '')
+            if (!fp) continue
+            const photoKey = String(photo.id || photo.url || photo.path)
+            if (!photoFingerprints.has(fp)) photoFingerprints.set(fp, [])
+            photoFingerprints.get(fp)!.push({ roomId: String(room.id), roomName: room.name || 'Untitled', photoKey })
+          }
+        }
+        const duplicateKeys = new Set<string>()
+        const duplicateGroups: Array<{ name: string; rooms: string[] }> = []
+        for (const [, entries] of photoFingerprints) {
+          if (entries.length > 1) {
+            for (const e of entries) duplicateKeys.add(e.photoKey)
+            const firstName = entries[0]?.roomName || ''
+            duplicateGroups.push({ name: firstName, rooms: entries.map((e) => e.roomName) })
+          }
+        }
+
         function deletePhoto(roomId: string, photoKey: string) {
           updateData((current) => ({
             ...current,
@@ -619,6 +642,13 @@ export function WizardSteps() {
               </div>
             )}
 
+            {duplicateGroups.length > 0 && (
+              <div className="rounded-2xl border border-rose-400/30 bg-rose-400/5 px-5 py-4">
+                <p className="text-sm font-medium text-rose-300">⚠ {duplicateGroups.length} possible duplicate{duplicateGroups.length === 1 ? '' : 's'} detected</p>
+                <p className="mt-1 text-xs text-slate-400">Same file uploaded to multiple rooms, or the same photo appears twice. Duplicates are highlighted with a red border below — delete or move them.</p>
+              </div>
+            )}
+
             {data.rooms.map((room) => (
               <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/35" key={room.id}>
                 <div className="flex items-center justify-between border-b border-[color:var(--border)] px-5 py-3">
@@ -632,7 +662,8 @@ export function WizardSteps() {
                     {(room.photos || []).map((photo) => {
                       const photoKey = String(photo.id || photo.url || photo.path)
                       return (
-                        <div className="group relative" key={photoKey}>
+                        <div className={`group relative ${duplicateKeys.has(photoKey) ? 'rounded-xl ring-2 ring-rose-500' : ''}`} key={photoKey}>
+                          {duplicateKeys.has(photoKey) && <span className="absolute left-1 top-1 z-10 rounded-full bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold text-white">DUPE</span>}
                           <img
                             alt={photo.name || photo.filename || room.name || 'Photo'}
                             className="aspect-square w-full rounded-xl object-cover"
