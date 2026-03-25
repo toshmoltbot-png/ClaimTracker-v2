@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildFloorPlanRooms,
   computeFloorPlanScale,
@@ -11,6 +11,14 @@ import { useClaimStore } from '@/store/claimStore'
 const CANVAS_WIDTH = 960
 const CANVAS_HEIGHT = 560
 
+interface EditState {
+  roomId: string
+  length: string
+  width: string
+  screenX: number
+  screenY: number
+}
+
 export function FloorPlanCanvas() {
   const data = useClaimStore((state) => state.data)
   const updateData = useClaimStore((state) => state.updateData)
@@ -18,6 +26,8 @@ export function FloorPlanCanvas() {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [editState, setEditState] = useState<EditState | null>(null)
+  const lengthRef = useRef<HTMLInputElement | null>(null)
   const floorPlan = ensureFloorPlanSettings(data.floorPlan)
   // Always recompute scale from room dimensions — never use a stale persisted value
   const scale = useMemo(() => computeFloorPlanScale(CANVAS_WIDTH, CANVAS_HEIGHT, data.rooms), [data.rooms])
@@ -26,6 +36,14 @@ export function FloorPlanCanvas() {
   // Compute max zIndex for "bring to front"
   const maxZ = useMemo(() => Math.max(0, ...layouts.map((l) => l.zIndex)), [layouts])
   const minZ = useMemo(() => Math.min(0, ...layouts.map((l) => l.zIndex)), [layouts])
+
+  // Focus the length input when edit popover opens
+  useEffect(() => {
+    if (editState && lengthRef.current) {
+      lengthRef.current.focus()
+      lengthRef.current.select()
+    }
+  }, [editState?.roomId])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -78,7 +96,53 @@ export function FloorPlanCanvas() {
     updateRoom(roomId, { floorPlanZIndex: minZ - 1 })
   }
 
+  function handleDoubleClick(roomId: string, event: React.MouseEvent) {
+    event.stopPropagation()
+    event.preventDefault()
+    const room = data.rooms.find((r) => String(r.id) === roomId)
+    if (!room) return
+    const dims = getRoomDimensions(room)
+    // Position popover near the click
+    setEditState({
+      roomId,
+      length: dims.length.toFixed(1),
+      width: dims.width.toFixed(1),
+      screenX: event.clientX,
+      screenY: event.clientY,
+    })
+  }
+
+  const saveEdit = useCallback(() => {
+    if (!editState) return
+    const newLength = parseFloat(editState.length)
+    const newWidth = parseFloat(editState.width)
+    if (Number.isFinite(newLength) && newLength > 0 && Number.isFinite(newWidth) && newWidth > 0) {
+      updateRoom(editState.roomId, {
+        length: newLength,
+        width: newWidth,
+        sqft: Number((newLength * newWidth).toFixed(1)),
+      })
+    }
+    setEditState(null)
+  }, [editState])
+
+  function cancelEdit() {
+    setEditState(null)
+  }
+
+  function handleEditKeyDown(event: React.KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      saveEdit()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      cancelEdit()
+    }
+  }
+
   function handlePointerDown(roomId: string, event: React.PointerEvent<HTMLDivElement>) {
+    // Don't start drag if edit popover is open for this room
+    if (editState?.roomId === roomId) return
     const layout = layouts.find((entry) => entry.roomId === roomId)
     if (!layout) return
     const stageRect = event.currentTarget.parentElement?.getBoundingClientRect()
@@ -129,6 +193,7 @@ export function FloorPlanCanvas() {
     // Deselect if clicking on the stage background (canvas)
     if (event.target === event.currentTarget || (event.target as HTMLElement).tagName === 'CANVAS') {
       setSelectedId(null)
+      if (editState) saveEdit()
     }
   }
 
@@ -149,12 +214,14 @@ export function FloorPlanCanvas() {
             const room = data.rooms.find((entry) => String(entry.id) === layout.roomId)
             const dims = room ? getRoomDimensions(room) : { length: 0, width: 0 }
             const isSelected = selectedId === layout.roomId
+            const isEditing = editState?.roomId === layout.roomId
             return (
               <div
                 className={`absolute select-none rounded-2xl border border-slate-950/80 shadow-[0_18px_40px_rgba(2,6,23,0.45)] transition-shadow ${
                   draggingId === layout.roomId ? 'ring-2 ring-sky-300/70' : ''
                 } ${isSelected && !draggingId ? 'ring-2 ring-sky-400/90' : ''}`}
                 key={layout.id}
+                onDoubleClick={(event) => handleDoubleClick(layout.roomId, event)}
                 onPointerDown={(event) => handlePointerDown(layout.roomId, event)}
                 style={{
                   left: `${layout.x}px`,
@@ -163,7 +230,7 @@ export function FloorPlanCanvas() {
                   height: `${layout.height}px`,
                   backgroundColor: `${layout.color}66`,
                   borderColor: layout.color,
-                  zIndex: layout.zIndex + 100, // offset so rooms are always above canvas
+                  zIndex: layout.zIndex + 100,
                 }}
               >
                 <div className="flex h-full flex-col justify-between p-3">
@@ -176,7 +243,7 @@ export function FloorPlanCanvas() {
                 </div>
 
                 {/* Room controls — visible when selected */}
-                {isSelected && (
+                {isSelected && !isEditing && (
                   <div
                     className="absolute -top-10 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-slate-900/95 px-2 py-1 shadow-lg backdrop-blur-sm border border-slate-700/60"
                     onPointerDown={(e) => e.stopPropagation()}
@@ -204,6 +271,59 @@ export function FloorPlanCanvas() {
                     >
                       ▼ Back
                     </button>
+                  </div>
+                )}
+
+                {/* Dimension edit popover — visible on double-click */}
+                {isEditing && (
+                  <div
+                    className="absolute -top-[5.5rem] left-1/2 z-[200] flex -translate-x-1/2 flex-col gap-2 rounded-xl bg-slate-900/98 px-4 py-3 shadow-2xl backdrop-blur-sm border border-slate-600/60"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="text-xs font-semibold text-slate-300 text-center">{layout.label} — Dimensions</div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-slate-400 w-7">L</label>
+                      <input
+                        ref={lengthRef}
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        value={editState.length}
+                        onChange={(e) => setEditState({ ...editState, length: e.target.value })}
+                        onKeyDown={handleEditKeyDown}
+                        className="w-20 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
+                      />
+                      <span className="text-xs text-slate-500">ft</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-slate-400 w-7">W</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        value={editState.width}
+                        onChange={(e) => setEditState({ ...editState, width: e.target.value })}
+                        onKeyDown={handleEditKeyDown}
+                        className="w-20 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
+                      />
+                      <span className="text-xs text-slate-500">ft</span>
+                    </div>
+                    <div className="flex gap-1.5 justify-end">
+                      <button
+                        className="rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                        onClick={cancelEdit}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="rounded-md bg-sky-600 px-3 py-1 text-xs font-semibold text-white hover:bg-sky-500 transition-colors"
+                        onClick={saveEdit}
+                      >
+                        Save
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-slate-500 text-center">Enter to save · Esc to cancel</div>
                   </div>
                 )}
               </div>
