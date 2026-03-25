@@ -12,14 +12,33 @@ const CANVAS_WIDTH = 960
 const CANVAS_HEIGHT = 560
 const MIN_ROOM_FT = 2 // minimum dimension in feet
 
+// --- Feet/Inches helpers ---
+function decimalToFeetInches(decimal: number): { feet: number; inches: number } {
+  const feet = Math.floor(decimal)
+  const inches = Math.round((decimal - feet) * 12)
+  // Handle rounding to 12 inches
+  if (inches >= 12) return { feet: feet + 1, inches: 0 }
+  return { feet, inches }
+}
+
+function feetInchesToDecimal(feet: number, inches: number): number {
+  return feet + inches / 12
+}
+
+function formatFeetInches(decimal: number): string {
+  const { feet, inches } = decimalToFeetInches(decimal)
+  if (inches === 0) return `${feet}′`
+  return `${feet}′ ${inches}″`
+}
+
 type ResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 
 interface EditState {
   roomId: string
-  length: string
-  width: string
-  screenX: number
-  screenY: number
+  lengthFt: string
+  lengthIn: string
+  widthFt: string
+  widthIn: string
 }
 
 interface ResizeState {
@@ -122,23 +141,31 @@ export function FloorPlanCanvas() {
     const room = data.rooms.find((r) => String(r.id) === roomId)
     if (!room) return
     const dims = getRoomDimensions(room)
+    const l = decimalToFeetInches(dims.length)
+    const w = decimalToFeetInches(dims.width)
     setEditState({
       roomId,
-      length: dims.length.toFixed(1),
-      width: dims.width.toFixed(1),
-      screenX: event.clientX,
-      screenY: event.clientY,
+      lengthFt: String(l.feet),
+      lengthIn: String(l.inches),
+      widthFt: String(w.feet),
+      widthIn: String(w.inches),
     })
   }
 
   const saveEdit = useCallback(() => {
     if (!editState) return
-    const newLength = parseFloat(editState.length)
-    const newWidth = parseFloat(editState.width)
-    if (Number.isFinite(newLength) && newLength > 0 && Number.isFinite(newWidth) && newWidth > 0) {
+    const newLength = feetInchesToDecimal(
+      parseInt(editState.lengthFt, 10) || 0,
+      parseInt(editState.lengthIn, 10) || 0,
+    )
+    const newWidth = feetInchesToDecimal(
+      parseInt(editState.widthFt, 10) || 0,
+      parseInt(editState.widthIn, 10) || 0,
+    )
+    if (newLength >= MIN_ROOM_FT && newWidth >= MIN_ROOM_FT) {
       updateRoom(editState.roomId, {
-        length: newLength,
-        width: newWidth,
+        length: Number(newLength.toFixed(4)),
+        width: Number(newWidth.toFixed(4)),
         sqft: Number((newLength * newWidth).toFixed(1)),
       })
     }
@@ -253,9 +280,9 @@ export function FloorPlanCanvas() {
       }
     }
 
-    // Round to 0.1 ft
-    newWidth = Math.round(newWidth * 10) / 10
-    newLength = Math.round(newLength * 10) / 10
+    // Round to nearest inch (1/12 ft)
+    newWidth = Math.round(newWidth * 12) / 12
+    newLength = Math.round(newLength * 12) / 12
 
     updateData((current) => ({
       ...current,
@@ -411,7 +438,7 @@ export function FloorPlanCanvas() {
                   {floorPlan.showLabels !== false ? <div className="text-sm font-semibold text-white">{layout.label}</div> : <span />}
                   {floorPlan.showDimensions !== false ? (
                     <div className="text-xs text-slate-100">
-                      {dims.length.toFixed(1)} x {dims.width.toFixed(1)} ft
+                      {formatFeetInches(dims.length)} × {formatFeetInches(dims.width)}
                     </div>
                   ) : null}
                 </div>
@@ -463,32 +490,54 @@ export function FloorPlanCanvas() {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="text-xs font-semibold text-slate-300 text-center">{layout.label} — Dimensions</div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <label className="text-xs text-slate-400 w-7">L</label>
                       <input
                         ref={lengthRef}
                         type="number"
-                        step="0.1"
-                        min="1"
-                        value={editState!.length}
-                        onChange={(e) => setEditState({ ...editState!, length: e.target.value })}
+                        step="1"
+                        min="0"
+                        value={editState!.lengthFt}
+                        onChange={(e) => setEditState({ ...editState!, lengthFt: e.target.value })}
                         onKeyDown={handleEditKeyDown}
-                        className="w-20 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
+                        className="w-14 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
                       />
                       <span className="text-xs text-slate-500">ft</span>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="11"
+                        value={editState!.lengthIn}
+                        onChange={(e) => setEditState({ ...editState!, lengthIn: e.target.value })}
+                        onKeyDown={handleEditKeyDown}
+                        className="w-14 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
+                      />
+                      <span className="text-xs text-slate-500">in</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <label className="text-xs text-slate-400 w-7">W</label>
                       <input
                         type="number"
-                        step="0.1"
-                        min="1"
-                        value={editState!.width}
-                        onChange={(e) => setEditState({ ...editState!, width: e.target.value })}
+                        step="1"
+                        min="0"
+                        value={editState!.widthFt}
+                        onChange={(e) => setEditState({ ...editState!, widthFt: e.target.value })}
                         onKeyDown={handleEditKeyDown}
-                        className="w-20 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
+                        className="w-14 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
                       />
                       <span className="text-xs text-slate-500">ft</span>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="11"
+                        value={editState!.widthIn}
+                        onChange={(e) => setEditState({ ...editState!, widthIn: e.target.value })}
+                        onKeyDown={handleEditKeyDown}
+                        className="w-14 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
+                      />
+                      <span className="text-xs text-slate-500">in</span>
                     </div>
                     <div className="flex gap-1.5 justify-end">
                       <button
