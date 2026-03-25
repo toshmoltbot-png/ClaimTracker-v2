@@ -368,32 +368,43 @@ export function FloorPlanCanvas() {
   }
 
   function renderResizeHandles(layout: { roomId: string; width: number; height: number }) {
-    const size = 8
-    const half = size / 2
+    const cornerSize = 10
+    const edgeSize = 7
+    const cHalf = cornerSize / 2
+    const eHalf = edgeSize / 2
+    const isCorner = (h: ResizeHandle) => h === 'nw' || h === 'ne' || h === 'sw' || h === 'se'
     const handles: Array<{ handle: ResizeHandle; left: number; top: number }> = [
-      { handle: 'nw', left: -half, top: -half },
-      { handle: 'n', left: layout.width / 2 - half, top: -half },
-      { handle: 'ne', left: layout.width - half, top: -half },
-      { handle: 'e', left: layout.width - half, top: layout.height / 2 - half },
-      { handle: 'se', left: layout.width - half, top: layout.height - half },
-      { handle: 's', left: layout.width / 2 - half, top: layout.height - half },
-      { handle: 'sw', left: -half, top: layout.height - half },
-      { handle: 'w', left: -half, top: layout.height / 2 - half },
+      { handle: 'nw', left: -cHalf, top: -cHalf },
+      { handle: 'n', left: layout.width / 2 - eHalf, top: -eHalf },
+      { handle: 'ne', left: layout.width - cHalf, top: -cHalf },
+      { handle: 'e', left: layout.width - eHalf, top: layout.height / 2 - eHalf },
+      { handle: 'se', left: layout.width - cHalf, top: layout.height - cHalf },
+      { handle: 's', left: layout.width / 2 - eHalf, top: layout.height - eHalf },
+      { handle: 'sw', left: -cHalf, top: layout.height - cHalf },
+      { handle: 'w', left: -eHalf, top: layout.height / 2 - eHalf },
     ]
-    return handles.map(({ handle, left, top }) => (
-      <div
-        key={handle}
-        className="absolute z-[150] rounded-full bg-sky-400 border border-sky-200 shadow-md hover:bg-sky-300 transition-colors"
-        style={{
-          left: `${left}px`,
-          top: `${top}px`,
-          width: `${size}px`,
-          height: `${size}px`,
-          cursor: HANDLE_CURSORS[handle],
-        }}
-        onPointerDown={(e) => handleResizeStart(layout.roomId, handle, e)}
-      />
-    ))
+    return handles.map(({ handle, left, top }) => {
+      const corner = isCorner(handle)
+      const sz = corner ? cornerSize : edgeSize
+      return (
+        <div
+          key={handle}
+          className={`absolute z-[150] border shadow-md transition-colors ${
+            corner
+              ? 'rounded-sm bg-white border-sky-400 hover:bg-sky-100'
+              : 'rounded-full bg-sky-400 border-sky-200 hover:bg-sky-300'
+          }`}
+          style={{
+            left: `${left}px`,
+            top: `${top}px`,
+            width: `${sz}px`,
+            height: `${sz}px`,
+            cursor: HANDLE_CURSORS[handle],
+          }}
+          onPointerDown={(e) => handleResizeStart(layout.roomId, handle, e)}
+        />
+      )
+    })
   }
 
   return (
