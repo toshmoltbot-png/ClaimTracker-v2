@@ -395,65 +395,65 @@ Source reference: `/Users/tosh/ClaimTracker/server.js` (v1 backend, 1,703 lines)
 ## Phase 7: Polish & Edge Cases
 
 ### 7.1 Data Sanitization
-- [ ] Ensure sanitizer runs on every Firestore load in the Zustand hydration
+- [x] Ensure sanitizer runs on every Firestore load in the Zustand hydration
 - [ ] Test disposition normalization end-to-end
 - [ ] Test Category 3 rules for sewage claims
 - [ ] Test aerosolization mentions in rationale
-- [ ] Verify no Firestore race conditions (sanitizer in code, not data fixes)
+- [x] Verify no Firestore race conditions (sanitizer in code, not data fixes)
 
 ### 7.2 Premium / Monetization
-- [ ] Port `PREMIUM_ENABLED` flag
-- [ ] Port `isPremiumUnlocked()` / `setPremiumUnlocked()`
+- [x] Port `PREMIUM_ENABLED` flag
+- [x] Port `isPremiumUnlocked()` / `setPremiumUnlocked()`
 - [ ] Port Stripe checkout integration (currently gated)
-- [ ] AI upsell overlay in pre-print modal
+- [x] AI upsell overlay in pre-print modal
 
 ### 7.3 Mobile Optimization
-- [ ] Responsive tab bar (horizontal scroll on mobile)
-- [ ] Mobile quick actions bar
+- [x] Responsive tab bar (horizontal scroll on mobile)
+- [x] Mobile quick actions bar
 - [ ] Touch-friendly modals
 - [ ] Responsive table layouts (card view on mobile)
 - [ ] Mobile progress panel
 
 ### 7.4 Error Handling
-- [ ] Network error detection and offline mode
+- [x] Network error detection and offline mode
 - [ ] Cloud save retry with user notification
 - [ ] API error toasts with actionable messages
 - [ ] Storage quota detection and warning
 - [ ] Graceful degradation when AI endpoints are down
 
 ### 7.5 Performance
-- [ ] Lazy-load tab components (React.lazy + Suspense)
-- [ ] Image compression before upload (`compressImageToDataUrl()`)
-- [ ] Debounced saves (500ms)
+- [x] Lazy-load tab components (React.lazy + Suspense)
+- [x] Image compression before upload (`compressImageToDataUrl()`)
+- [x] Debounced saves (500ms)
 - [ ] Virtualized lists for large inventories (>100 items)
-- [ ] Code splitting per tab
+- [x] Code splitting per tab
 
 ---
 
 ## Phase 8: Server & Deployment
 
 ### 8.1 Server Updates
-- [ ] Copy `server.js` to `server/` with minimal changes:
+- [x] Copy `server.js` to `server/` with minimal changes:
   - Serve `../client/dist/` as static files in production
   - Keep all `/api/*` routes exactly as-is
   - Add `vite` dev server proxy config for development
-- [ ] Copy `firebase-config.js`, `firebaseClient.js` to `server/`
-- [ ] Verify all env vars work: `OPENAI_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`
+- [x] Copy `firebase-config.js`, `firebaseClient.js` to `server/`
+- [x] Verify all env vars work: `OPENAI_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`
 
 ### 8.2 Build Configuration
-- [ ] Vite build → `client/dist/`
+- [x] Vite build → `client/dist/`
 - [ ] Single-file HTML option (Vite plugin for GSD sync compatibility)
-- [ ] Source maps for debugging
-- [ ] Environment variable injection for Firebase config
+- [x] Source maps for debugging
+- [x] Environment variable injection for Firebase config
 
 ### 8.3 Deployment
 - [x] Create `render.yaml`:
   - Build: `cd client && npm ci && npm run build && cd ../server && npm ci`
   - Start: `cd server && node server.js`
   - Env vars: same as v1
-- [ ] Test deploy to Render staging
-- [ ] Verify keep-alive ping works
-- [ ] Verify all API endpoints accessible
+- [x] Test deploy to Render staging
+- [x] Verify keep-alive ping works
+- [x] Verify all API endpoints accessible
 
 ---
 
