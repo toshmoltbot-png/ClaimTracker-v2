@@ -10,6 +10,9 @@ import { useClaimStore } from '@/store/claimStore'
 
 const CANVAS_WIDTH = 960
 const CANVAS_HEIGHT = 560
+const MIN_ROOM_FT = 2 // minimum dimension in feet
+
+type ResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 
 interface EditState {
   roomId: string
@@ -17,6 +20,24 @@ interface EditState {
   width: string
   screenX: number
   screenY: number
+}
+
+interface ResizeState {
+  roomId: string
+  handle: ResizeHandle
+  startX: number // pointer start in canvas coords
+  startY: number
+  origLength: number // original room dimensions in feet
+  origWidth: number
+  origCenterX: number // original center in canvas px
+  origCenterY: number
+}
+
+const HANDLE_CURSORS: Record<ResizeHandle, string> = {
+  n: 'ns-resize', s: 'ns-resize',
+  e: 'ew-resize', w: 'ew-resize',
+  ne: 'nesw-resize', sw: 'nesw-resize',
+  nw: 'nwse-resize', se: 'nwse-resize',
 }
 
 export function FloorPlanCanvas() {
@@ -27,17 +48,16 @@ export function FloorPlanCanvas() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editState, setEditState] = useState<EditState | null>(null)
+  const [resizeState, setResizeState] = useState<ResizeState | null>(null)
   const lengthRef = useRef<HTMLInputElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const floorPlan = ensureFloorPlanSettings(data.floorPlan)
-  // Always recompute scale from room dimensions — never use a stale persisted value
   const scale = useMemo(() => computeFloorPlanScale(CANVAS_WIDTH, CANVAS_HEIGHT, data.rooms), [data.rooms])
   const layouts = useMemo(() => buildFloorPlanRooms(CANVAS_WIDTH, CANVAS_HEIGHT, data.rooms, { ...floorPlan, scale }), [data.rooms, floorPlan, scale])
 
-  // Compute max zIndex for "bring to front"
   const maxZ = useMemo(() => Math.max(0, ...layouts.map((l) => l.zIndex)), [layouts])
   const minZ = useMemo(() => Math.min(0, ...layouts.map((l) => l.zIndex)), [layouts])
 
-  // Focus the length input when edit popover opens
   useEffect(() => {
     if (editState && lengthRef.current) {
       lengthRef.current.focus()
@@ -102,7 +122,6 @@ export function FloorPlanCanvas() {
     const room = data.rooms.find((r) => String(r.id) === roomId)
     if (!room) return
     const dims = getRoomDimensions(room)
-    // Position popover near the click
     setEditState({
       roomId,
       length: dims.length.toFixed(1),
@@ -140,9 +159,101 @@ export function FloorPlanCanvas() {
     }
   }
 
+  // --- Resize handle logic ---
+  function getCanvasCoords(event: React.PointerEvent): { cx: number; cy: number } {
+    const stage = stageRef.current?.getBoundingClientRect()
+    if (!stage) return { cx: 0, cy: 0 }
+    return {
+      cx: ((event.clientX - stage.left) / stage.width) * CANVAS_WIDTH,
+      cy: ((event.clientY - stage.top) / stage.height) * CANVAS_HEIGHT,
+    }
+  }
+
+  function handleResizeStart(roomId: string, handle: ResizeHandle, event: React.PointerEvent) {
+    event.stopPropagation()
+    event.preventDefault()
+    const room = data.rooms.find((r) => String(r.id) === roomId)
+    const layout = layouts.find((l) => l.roomId === roomId)
+    if (!room || !layout) return
+    const dims = getRoomDimensions(room)
+    const { cx, cy } = getCanvasCoords(event)
+    setResizeState({
+      roomId,
+      handle,
+      startX: cx,
+      startY: cy,
+      origLength: dims.length,
+      origWidth: dims.width,
+      origCenterX: layout.centerX,
+      origCenterY: layout.centerY,
+    })
+    ;(event.target as HTMLElement).setPointerCapture(event.pointerId)
+  }
+
+  function handleResizeMove(event: React.PointerEvent) {
+    if (!resizeState) return
+    const { cx, cy } = getCanvasCoords(event)
+    const dx = cx - resizeState.startX
+    const dy = cy - resizeState.startY
+    const dxFt = dx / scale
+    const dyFt = dy / scale
+
+    let newWidth = resizeState.origWidth
+    let newLength = resizeState.origLength
+    let newCenterX = resizeState.origCenterX
+    let newCenterY = resizeState.origCenterY
+    const h = resizeState.handle
+
+    // East edges: expand width rightward
+    if (h === 'e' || h === 'ne' || h === 'se') {
+      newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth + dxFt)
+      newCenterX = resizeState.origCenterX + (newWidth - resizeState.origWidth) * scale / 2
+    }
+    // West edges: expand width leftward
+    if (h === 'w' || h === 'nw' || h === 'sw') {
+      newWidth = Math.max(MIN_ROOM_FT, resizeState.origWidth - dxFt)
+      newCenterX = resizeState.origCenterX - (newWidth - resizeState.origWidth) * scale / 2
+    }
+    // South edges: expand length downward
+    if (h === 's' || h === 'se' || h === 'sw') {
+      newLength = Math.max(MIN_ROOM_FT, resizeState.origLength + dyFt)
+      newCenterY = resizeState.origCenterY + (newLength - resizeState.origLength) * scale / 2
+    }
+    // North edges: expand length upward
+    if (h === 'n' || h === 'ne' || h === 'nw') {
+      newLength = Math.max(MIN_ROOM_FT, resizeState.origLength - dyFt)
+      newCenterY = resizeState.origCenterY - (newLength - resizeState.origLength) * scale / 2
+    }
+
+    // Round to 0.1 ft
+    newWidth = Math.round(newWidth * 10) / 10
+    newLength = Math.round(newLength * 10) / 10
+
+    updateData((current) => ({
+      ...current,
+      rooms: current.rooms.map((room) =>
+        String(room.id) === resizeState.roomId
+          ? {
+              ...room,
+              width: newWidth,
+              length: newLength,
+              sqft: Number((newWidth * newLength).toFixed(1)),
+              floorPlanX: Number((newCenterX / scale).toFixed(4)),
+              floorPlanY: Number((newCenterY / scale).toFixed(4)),
+            }
+          : room,
+      ),
+    }))
+  }
+
+  function handleResizeEnd() {
+    setResizeState(null)
+  }
+
+  // --- Room drag logic ---
   function handlePointerDown(roomId: string, event: React.PointerEvent<HTMLDivElement>) {
-    // Don't start drag if edit popover is open for this room
     if (editState?.roomId === roomId) return
+    if (resizeState) return
     const layout = layouts.find((entry) => entry.roomId === roomId)
     if (!layout) return
     const stageRect = event.currentTarget.parentElement?.getBoundingClientRect()
@@ -159,6 +270,10 @@ export function FloorPlanCanvas() {
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (resizeState) {
+      handleResizeMove(event)
+      return
+    }
     if (!draggingId) return
     const stage = event.currentTarget.getBoundingClientRect()
     const layout = layouts.find((entry) => entry.roomId === draggingId)
@@ -187,19 +302,49 @@ export function FloorPlanCanvas() {
 
   function stopDragging() {
     setDraggingId(null)
+    if (resizeState) handleResizeEnd()
   }
 
   function handleStageClick(event: React.PointerEvent<HTMLDivElement>) {
-    // Deselect if clicking on the stage background (canvas)
     if (event.target === event.currentTarget || (event.target as HTMLElement).tagName === 'CANVAS') {
       setSelectedId(null)
       if (editState) saveEdit()
     }
   }
 
+  function renderResizeHandles(layout: { roomId: string; width: number; height: number }) {
+    const size = 8
+    const half = size / 2
+    const handles: Array<{ handle: ResizeHandle; left: number; top: number }> = [
+      { handle: 'nw', left: -half, top: -half },
+      { handle: 'n', left: layout.width / 2 - half, top: -half },
+      { handle: 'ne', left: layout.width - half, top: -half },
+      { handle: 'e', left: layout.width - half, top: layout.height / 2 - half },
+      { handle: 'se', left: layout.width - half, top: layout.height - half },
+      { handle: 's', left: layout.width / 2 - half, top: layout.height - half },
+      { handle: 'sw', left: -half, top: layout.height - half },
+      { handle: 'w', left: -half, top: layout.height / 2 - half },
+    ]
+    return handles.map(({ handle, left, top }) => (
+      <div
+        key={handle}
+        className="absolute z-[150] rounded-full bg-sky-400 border border-sky-200 shadow-md hover:bg-sky-300 transition-colors"
+        style={{
+          left: `${left}px`,
+          top: `${top}px`,
+          width: `${size}px`,
+          height: `${size}px`,
+          cursor: HANDLE_CURSORS[handle],
+        }}
+        onPointerDown={(e) => handleResizeStart(layout.roomId, handle, e)}
+      />
+    ))
+  }
+
   return (
     <section className="panel relative overflow-hidden px-4 py-4">
       <div
+        ref={stageRef}
         className="relative mx-auto h-[560px] w-full max-w-[960px] touch-none overflow-hidden rounded-2xl border border-[color:var(--border)]"
         onPointerDown={handleStageClick}
         onPointerLeave={stopDragging}
@@ -215,6 +360,7 @@ export function FloorPlanCanvas() {
             const dims = room ? getRoomDimensions(room) : { length: 0, width: 0 }
             const isSelected = selectedId === layout.roomId
             const isEditing = editState?.roomId === layout.roomId
+            const isResizing = resizeState?.roomId === layout.roomId
             return (
               <div
                 className={`absolute select-none rounded-2xl border border-slate-950/80 shadow-[0_18px_40px_rgba(2,6,23,0.45)] transition-shadow ${
@@ -242,8 +388,11 @@ export function FloorPlanCanvas() {
                   ) : null}
                 </div>
 
-                {/* Room controls — visible when selected */}
-                {isSelected && !isEditing && (
+                {/* Resize handles — visible when selected */}
+                {(isSelected || isResizing) && !isEditing && renderResizeHandles(layout)}
+
+                {/* Room controls toolbar — visible when selected, not editing or resizing */}
+                {isSelected && !isEditing && !isResizing && (
                   <div
                     className="absolute -top-10 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-slate-900/95 px-2 py-1 shadow-lg backdrop-blur-sm border border-slate-700/60"
                     onPointerDown={(e) => e.stopPropagation()}
@@ -289,8 +438,8 @@ export function FloorPlanCanvas() {
                         type="number"
                         step="0.1"
                         min="1"
-                        value={editState.length}
-                        onChange={(e) => setEditState({ ...editState, length: e.target.value })}
+                        value={editState!.length}
+                        onChange={(e) => setEditState({ ...editState!, length: e.target.value })}
                         onKeyDown={handleEditKeyDown}
                         className="w-20 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
                       />
@@ -302,8 +451,8 @@ export function FloorPlanCanvas() {
                         type="number"
                         step="0.1"
                         min="1"
-                        value={editState.width}
-                        onChange={(e) => setEditState({ ...editState, width: e.target.value })}
+                        value={editState!.width}
+                        onChange={(e) => setEditState({ ...editState!, width: e.target.value })}
                         onKeyDown={handleEditKeyDown}
                         className="w-20 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400/50"
                       />
