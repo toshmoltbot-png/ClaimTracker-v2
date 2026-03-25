@@ -569,56 +569,105 @@ export function WizardSteps() {
       }
       case 5: {
         const totalPhotos = data.rooms.reduce((sum, r) => sum + (r.photos || []).length, 0)
-        const roomsWithPhotos = data.rooms.filter((r) => (r.photos || []).length > 0)
         const roomsWithoutPhotos = data.rooms.filter((r) => (r.photos || []).length === 0)
+
+        function deletePhoto(roomId: string, photoKey: string) {
+          updateData((current) => ({
+            ...current,
+            rooms: current.rooms.map((r) =>
+              String(r.id) === roomId
+                ? { ...r, photos: (r.photos || []).filter((p) => String(p.id || p.url || p.path) !== photoKey) }
+                : r
+            ),
+          }))
+          pushToast('Photo removed.', 'info')
+        }
+
+        function movePhoto(fromRoomId: string, photoKey: string, toRoomId: string) {
+          updateData((current) => {
+            const fromRoom = current.rooms.find((r) => String(r.id) === fromRoomId)
+            const photo = (fromRoom?.photos || []).find((p) => String(p.id || p.url || p.path) === photoKey)
+            if (!photo) return current
+            return {
+              ...current,
+              rooms: current.rooms.map((r) => {
+                if (String(r.id) === fromRoomId) return { ...r, photos: (r.photos || []).filter((p) => String(p.id || p.url || p.path) !== photoKey) }
+                if (String(r.id) === toRoomId) return { ...r, photos: [...(r.photos || []), { ...photo, roomId: toRoomId }] }
+                return r
+              }),
+            }
+          })
+          const toName = data.rooms.find((r) => String(r.id) === toRoomId)?.name || 'room'
+          pushToast(`Photo moved to ${toName}.`, 'success')
+        }
+
         return (
           <div className="space-y-5">
             <div>
               <h3 className="text-lg font-semibold text-white">Photo review</h3>
               <p className="mt-2 text-sm leading-7 text-slate-300">
-                You've uploaded <span className="font-semibold text-white">{totalPhotos} photo{totalPhotos === 1 ? '' : 's'}</span> across{' '}
-                <span className="font-semibold text-white">{roomsWithPhotos.length} room{roomsWithPhotos.length === 1 ? '' : 's'}</span>.
-                Review coverage below before continuing.
+                <span className="font-semibold text-white">{totalPhotos} photo{totalPhotos === 1 ? '' : 's'}</span> across{' '}
+                <span className="font-semibold text-white">{data.rooms.length} room{data.rooms.length === 1 ? '' : 's'}</span>.
+                {' '}Check each room below — delete wrong photos or move them to the correct room.
               </p>
             </div>
 
             {roomsWithoutPhotos.length > 0 && (
               <div className="rounded-2xl border border-amber-400/30 bg-amber-400/5 px-5 py-4">
-                <p className="text-sm font-medium text-amber-300">⚠ {roomsWithoutPhotos.length} room{roomsWithoutPhotos.length === 1 ? '' : 's'} with no photos:</p>
-                <p className="mt-1 text-sm text-slate-300">{roomsWithoutPhotos.map((r) => r.name || 'Untitled').join(', ')}</p>
-                <button className="mt-3 text-xs font-medium text-amber-300 hover:text-amber-100" onClick={() => { setPhotoRoomId(roomsWithoutPhotos[0]?.id || ''); previousStep() }} type="button">← Go back and add photos</button>
+                <p className="text-sm font-medium text-amber-300">⚠ {roomsWithoutPhotos.length} room{roomsWithoutPhotos.length === 1 ? '' : 's'} with no photos: {roomsWithoutPhotos.map((r) => r.name || 'Untitled').join(', ')}</p>
+                <button className="mt-2 text-xs font-medium text-amber-300 hover:text-amber-100" onClick={() => { setPhotoRoomId(roomsWithoutPhotos[0]?.id || ''); previousStep() }} type="button">← Go back and add photos</button>
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {data.rooms.map((room) => (
-                <div className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-slate-950/35" key={room.id}>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <p className="font-semibold text-white">{room.name || 'Untitled'}</p>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${(room.photos || []).length > 0 ? 'bg-emerald-400/15 text-emerald-300' : 'bg-slate-700/50 text-slate-500'}`}>
-                      {(room.photos || []).length} 📷
-                    </span>
-                  </div>
-                  {(room.photos || []).length > 0 ? (
-                    <div className="grid grid-cols-3 gap-1 px-1 pb-1">
-                      {(room.photos || []).slice(0, 6).map((photo) => (
-                        <img
-                          alt={photo.name || photo.filename || room.name || 'Room photo'}
-                          className="aspect-square rounded-lg object-cover"
-                          key={String(photo.id || photo.url || photo.path)}
-                          src={photo.url || photo.dataUrl || photo.data || ''}
-                        />
-                      ))}
-                      {(room.photos || []).length > 6 && (
-                        <div className="flex aspect-square items-center justify-center rounded-lg bg-slate-800 text-sm text-slate-400">+{(room.photos || []).length - 6}</div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="px-4 pb-4 text-xs text-slate-500">No photos yet</div>
-                  )}
+            {data.rooms.map((room) => (
+              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/35" key={room.id}>
+                <div className="flex items-center justify-between border-b border-[color:var(--border)] px-5 py-3">
+                  <h4 className="font-semibold text-white">{room.name || 'Untitled'}</h4>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${(room.photos || []).length > 0 ? 'bg-emerald-400/15 text-emerald-300' : 'bg-slate-700/50 text-slate-500'}`}>
+                    {(room.photos || []).length} photo{(room.photos || []).length === 1 ? '' : 's'}
+                  </span>
                 </div>
-              ))}
-            </div>
+                {(room.photos || []).length > 0 ? (
+                  <div className="grid grid-cols-3 gap-3 p-4 sm:grid-cols-4 md:grid-cols-6">
+                    {(room.photos || []).map((photo) => {
+                      const photoKey = String(photo.id || photo.url || photo.path)
+                      return (
+                        <div className="group relative" key={photoKey}>
+                          <img
+                            alt={photo.name || photo.filename || room.name || 'Photo'}
+                            className="aspect-square w-full rounded-xl object-cover"
+                            src={photo.url || photo.dataUrl || photo.data || ''}
+                          />
+                          {/* Delete button */}
+                          <button
+                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100"
+                            onClick={() => deletePhoto(String(room.id), photoKey)}
+                            title="Delete photo"
+                            type="button"
+                          >✕</button>
+                          {/* Move dropdown */}
+                          {data.rooms.length > 1 && (
+                            <select
+                              className="absolute bottom-1 left-1 right-1 rounded-lg bg-black/80 px-1 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
+                              onChange={(e) => { if (e.target.value) { movePhoto(String(room.id), photoKey, e.target.value); e.target.value = '' } }}
+                              title="Move to another room"
+                              value=""
+                            >
+                              <option value="">Move to…</option>
+                              {data.rooms.filter((r) => String(r.id) !== String(room.id)).map((r) => (
+                                <option key={r.id} value={String(r.id)}>{r.name || 'Untitled'}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-5 py-4 text-sm text-slate-500">No photos — <button className="text-sky-400 hover:text-sky-300" onClick={() => { setPhotoRoomId(String(room.id)); previousStep() }} type="button">go back to add some</button></div>
+                )}
+              </div>
+            ))}
           </div>
         )
       }
