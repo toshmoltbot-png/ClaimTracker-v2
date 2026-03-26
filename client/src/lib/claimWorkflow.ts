@@ -312,7 +312,7 @@ export function updateExpenseLineTotal(entry: ExpenseEntry) {
     amount = parseMoneyValue(entry.dailyCostIncrease) * totalDays
   } else if (category === 'lodging' || category === 'food' || category === 'transportation' || category === 'storage' || category === 'laundry' || category === 'pet care') {
     amount = lineItemsTotal > 0 ? lineItemsTotal : parseMoneyValue(entry.dailyCost) * totalDays || amount
-  } else if (category === 'cleanup labor') {
+  } else if (category === 'cleanup labor' || category === 'emergency mitigation - cleanup') {
     amount = parseMoneyValue(entry.hours) * parseMoneyValue(entry.hourlyRate)
   } else if (lineItemsTotal > 0) {
     amount = lineItemsTotal
@@ -329,7 +329,7 @@ export function updateExpenseLineTotal(entry: ExpenseEntry) {
 function getExpenseBucket(category: string | null | undefined) {
   const normalized = String(category || 'Other').trim().toLowerCase()
   if (normalized === 'utilities') return 'utilityEntries'
-  if (normalized === 'cleanup labor') return 'laborEntries'
+  if (normalized === 'cleanup labor' || normalized === 'emergency mitigation - cleanup') return 'laborEntries'
   if (normalized === 'disposal') return 'disposalEntries'
   if (['lodging', 'food', 'transportation', 'storage', 'laundry', 'pet care'].includes(normalized)) return 'livingEntries'
   return 'miscEntries'
