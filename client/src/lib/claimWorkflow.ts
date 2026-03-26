@@ -537,7 +537,7 @@ export function snapFloorPlanPoint(x: number, y: number, scale: number, enabled:
   }
 }
 
-export function buildFloorPlanRooms(containerWidth: number, containerHeight: number, rooms: Room[], floorPlan?: FloorPlan | null): FloorPlanRoomLayout[] {
+export function buildFloorPlanRooms(containerWidth: number, containerHeight: number, rooms: Room[], _floorPlan?: FloorPlan | null): FloorPlanRoomLayout[] {
   // Always compute scale from room dimensions to prevent overflow
   const scale = computeFloorPlanScale(containerWidth, containerHeight, rooms)
   const padding = 18

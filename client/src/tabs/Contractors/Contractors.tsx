@@ -4,7 +4,7 @@ import { getContractorFindings, normalizeContractorDraft, uploadAndAnalyzeContra
 import { fmtUSDate } from '@/lib/dates'
 import { upsertById } from '@/lib/utils'
 import { useClaimStore } from '@/store/claimStore'
-import type { Contractor, ContractorReport } from '@/types/claim'
+import type { Contractor } from '@/types/claim'
 import { ContractorModal } from '@/tabs/Contractors/ContractorModal'
 
 export function Contractors() {

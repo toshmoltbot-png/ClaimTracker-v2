@@ -23,7 +23,7 @@ import { compressImageToDataUrl, dataUrlToBase64, readFileAsDataUrl } from '@/li
 import { apiClient } from '@/lib/api'
 import { normalizeReceiptPayload, getReceiptItems } from '@/lib/claimWorkflow'
 import { extractPolicyText, parsePolicyFields } from '@/lib/policyParser'
-import { storeDataUrl, storeMediaFile, uploadFile } from '@/lib/firebase'
+import { uploadFile } from '@/lib/firebase'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import type { AnalysisMode, ExpenseEntry, FileItem, Receipt, Room } from '@/types/claim'
@@ -68,7 +68,7 @@ function buildRoomDraft(): Room {
   })
 }
 
-function cycleMode(mode: AnalysisMode): AnalysisMode {
+export function cycleMode(mode: AnalysisMode): AnalysisMode {
   if (mode === 'ITEM_VIEW') return 'ROOM_VIEW'
   if (mode === 'ROOM_VIEW') return 'FOCUSED_VIEW'
   return 'ITEM_VIEW'
@@ -92,6 +92,7 @@ export function WizardSteps() {
   const [uploadingCount, setUploadingCount] = useState(0)
   const [tipDismissed, setTipDismissed] = useState(false)
   const [preScreenModes, setPreScreenModes] = useState<Record<string, AnalysisMode>>({})
+  void setPreScreenModes
   const [policyUploadStatus, setPolicyUploadStatus] = useState<string>('')
   const [receiptParsing, setReceiptParsing] = useState<string>('')
   const [reportParsing, setReportParsing] = useState<string>('')
@@ -171,6 +172,7 @@ export function WizardSteps() {
   const progress = Math.round((wizard.step / steps.length) * 100)
   const photoEntries = useMemo(() => buildPhotoLibraryEntries(data), [data])
   const wizardTip = !tipDismissed ? stepTips[wizard.step] : null
+  void progress; void wizardTip
   const floorPlan = ensureFloorPlanSettings(data.floorPlan)
   const utilityRanges = useMemo(
     () => (data.expenses.utilityEntries || []).map((entry) => ({ start: entry.dateStart, end: entry.dateEnd, label: entry.description || entry.utilityType || 'Utility span' })),
@@ -241,13 +243,13 @@ export function WizardSteps() {
           return null
         }
       }),
-    ).then((results) => results.filter((r): r is FileItem => r !== null))
+    ).then((results) => results.filter((r) => r !== null) as FileItem[])
     setUploadingCount(0)
     updateData((current) => ({
       ...current,
       rooms: current.rooms.map((entry) => (
-        String(entry.id) === String(room.id) ? { ...entry, photos: [...(entry.photos || []), ...stored] } : entry
-      )),
+        String(entry.id) === String(room.id) ? { ...entry, photos: [...(entry.photos || []).filter((p): p is FileItem => p !== null), ...stored] } : entry
+      )) as Room[],
     }))
     pushToast(`${stored.length} room photo${stored.length === 1 ? '' : 's'} uploaded.`, 'success')
   }
@@ -274,6 +276,7 @@ export function WizardSteps() {
     })
     pushToast('Pre-screen recommendations sent to AI Builder.', 'success')
   }
+  void applyPreScreen
 
   async function uploadReceipts(files: Array<{ file: File; previewUrl: string }>) {
     for (let i = 0; i < files.length; i++) {
@@ -443,11 +446,11 @@ export function WizardSteps() {
               </label>
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-200">Insured name</span>
-                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, insuredName: event.target.value }, dashboard: { ...current.dashboard, insuredName: event.target.value } }))} value={data.claim.insuredName || data.dashboard.insuredName || ''} />
+                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, insuredName: event.target.value }, dashboard: { ...current.dashboard, insuredName: event.target.value } }))} value={(data.claim.insuredName as string) || data.dashboard.insuredName || ''} />
               </label>
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-200">Deductible</span>
-                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, deductible: event.target.value }, dashboard: { ...current.dashboard, deductible: event.target.value } }))} placeholder="$1,000" value={data.claim.deductible || data.dashboard.deductible || ''} />
+                <input className="field" onChange={(event) => updateData((current) => ({ ...current, claim: { ...current.claim, deductible: event.target.value }, dashboard: { ...current.dashboard, deductible: event.target.value } }))} placeholder="$1,000" value={(data.claim.deductible as string) || data.dashboard.deductible || ''} />
               </label>
               <label className="space-y-2 md:col-span-2">
                 <span className="text-sm font-medium text-slate-200">Insurer</span>
@@ -978,7 +981,7 @@ export function WizardSteps() {
         const current = steps9[Math.max(0, Math.min(steps9.length - 1, expenseSubStep - 1))]
         const nextLabel = expenseSubStep < 5 ? steps9[expenseSubStep]?.title : 'Finish expenses'
 
-        const subtotal = current.entries.reduce((sum, entry) => sum + Number(entry.amount || entry.totalAmount || 0), 0)
+        const subtotal = current.entries.reduce((sum, entry) => sum + Number(entry.amount || (entry as Record<string, unknown>).totalAmount || 0), 0)
 
         const goNext = () => {
           if (expenseSubStep < 5) setExpenseSubStep((s) => s + 1)
@@ -1038,7 +1041,7 @@ export function WizardSteps() {
                     <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
                       <div>
                         <p className="text-sm font-medium text-white">{expense.description || expense.category || 'Expense'}</p>
-                        <p className="text-xs text-slate-400">{expense.category} · {formatCurrency(Number(expense.amount || expense.totalAmount || 0))}</p>
+                        <p className="text-xs text-slate-400">{expense.category} · {formatCurrency(Number(expense.amount || (expense as Record<string, unknown>).totalAmount || 0))}</p>
                       </div>
                       <div className="flex gap-2">
                         <button
