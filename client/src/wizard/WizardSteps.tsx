@@ -98,6 +98,7 @@ export function WizardSteps() {
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null)
   const [editingExpense, setEditingExpense] = useState<ExpenseEntry | null>(null)
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
+  const [expenseSubStep, setExpenseSubStep] = useState(1)
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`📄 ${file.name} — processing...`)
@@ -160,6 +161,10 @@ export function WizardSteps() {
 
   useEffect(() => {
     setTipDismissed(localStorage.getItem(`${ONBOARDING_TIP_PREFIX}${wizard.step}`) === 'dismissed')
+  }, [wizard.step])
+
+  useEffect(() => {
+    if (wizard.step === 9) setExpenseSubStep(1)
   }, [wizard.step])
 
   const contentRef = { current: null as HTMLDivElement | null }
@@ -901,66 +906,187 @@ export function WizardSteps() {
             <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add these later →</button>
           </div>
         )
-      case 9:
+      case 9: {
+        const steps9 = [
+          {
+            key: 1,
+            title: 'Emergency Mitigation - Cleanup',
+            subtitle: 'Cleanup labor entries',
+            helper: 'Document cleanup, moving, and salvage work you or family members performed. Homeowner labor is reimbursable at $25–$40/hr.',
+            theme: {
+              wrapper: 'border-sky-400/25 bg-sky-400/10',
+              accentText: 'text-sky-200',
+              accentButton: 'bg-sky-500/20 text-sky-100 hover:bg-sky-500/30',
+            },
+            defaultCategory: 'Emergency Mitigation - Cleanup' as const,
+            entries: (data.expenses.laborEntries || []).map((e) => ({ ...e, category: e.category || 'Emergency Mitigation - Cleanup' })),
+          },
+          {
+            key: 2,
+            title: 'Utility Increase',
+            subtitle: 'Utility entries',
+            helper: 'Running dehumidifiers, extra heating, or industrial fans? Those utility spikes are reimbursable.',
+            theme: {
+              wrapper: 'border-amber-400/25 bg-amber-400/10',
+              accentText: 'text-amber-200',
+              accentButton: 'bg-amber-500/20 text-amber-100 hover:bg-amber-500/30',
+            },
+            defaultCategory: 'Utilities' as const,
+            entries: (data.expenses.utilityEntries || []).map((e) => ({ ...e, category: e.category || 'Utilities' })),
+          },
+          {
+            key: 3,
+            title: 'Disposal',
+            subtitle: 'Disposal entries',
+            helper: 'Dumpster rentals, dump runs, haul-off fees — document all disposal costs.',
+            theme: {
+              wrapper: 'border-rose-400/25 bg-rose-400/10',
+              accentText: 'text-rose-200',
+              accentButton: 'bg-rose-500/20 text-rose-100 hover:bg-rose-500/30',
+            },
+            defaultCategory: 'Disposal' as const,
+            entries: (data.expenses.disposalEntries || []).map((e) => ({ ...e, category: e.category || 'Disposal' })),
+          },
+          {
+            key: 4,
+            title: 'Living Expenses',
+            subtitle: 'Lodging, food, transportation, etc.',
+            helper: 'Hotel stays, meals, laundry, pet boarding, storage — if you were displaced, these are covered under Additional Living Expenses (ALE).',
+            theme: {
+              wrapper: 'border-emerald-400/25 bg-emerald-400/10',
+              accentText: 'text-emerald-200',
+              accentButton: 'bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30',
+            },
+            defaultCategory: 'Lodging' as const,
+            entries: (data.expenses.livingEntries || []).map((e) => ({ ...e, category: e.category || 'Lodging' })),
+          },
+          {
+            key: 5,
+            title: 'Other / Misc',
+            subtitle: 'Misc entries',
+            helper: "Anything that doesn't fit the categories above — storage units, special cleaning supplies, PPE, etc.",
+            theme: {
+              wrapper: 'border-purple-400/25 bg-purple-400/10',
+              accentText: 'text-purple-200',
+              accentButton: 'bg-purple-500/20 text-purple-100 hover:bg-purple-500/30',
+            },
+            defaultCategory: 'Other' as const,
+            entries: (data.expenses.miscEntries || []).map((e) => ({ ...e, category: e.category || 'Other' })),
+          },
+        ]
+
+        const current = steps9[Math.max(0, Math.min(steps9.length - 1, expenseSubStep - 1))]
+        const nextLabel = expenseSubStep < 5 ? steps9[expenseSubStep]?.title : 'Finish expenses'
+
+        const subtotal = current.entries.reduce((sum, entry) => sum + Number(entry.amount || entry.totalAmount || 0), 0)
+
+        const goNext = () => {
+          if (expenseSubStep < 5) setExpenseSubStep((s) => s + 1)
+          else nextStep()
+        }
+
+        const goBack = () => {
+          if (expenseSubStep > 1) setExpenseSubStep((s) => s - 1)
+          else previousStep()
+        }
+
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold text-white">Additional Living Expenses</h3>
-            <p className="text-sm text-slate-300">Most homeowners miss $500–$2,000+ in reimbursable expenses. Quick-add common categories below.</p>
-            <WeatherCard address={data.dashboard.insuredAddress || data.claim.propertyAddress || ''} dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss || ''} utilityDateRanges={utilityRanges} />
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <button className="rounded-2xl border border-sky-400/25 bg-sky-400/10 px-4 py-4 text-left text-sky-50" onClick={() => quickAddExpense('Emergency Mitigation - Cleanup', 'Initial cleanup labor', 150)} type="button"><span className="block font-medium">Emergency Mitigation - Cleanup</span><span className="mt-1 block text-xs opacity-70">Your hours at $25-40/hr</span></button>
-              <button className="rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-4 text-left text-amber-50" onClick={() => quickAddExpense('Utilities', 'Utility increase estimate', 35)} type="button"><span className="block font-medium">Utility increase</span><span className="mt-1 block text-xs opacity-70">Heating, electric spikes</span></button>
-              <button className="rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 py-4 text-left text-rose-50" onClick={() => quickAddExpense('Disposal', 'Disposal / haul-off', 125)} type="button"><span className="block font-medium">Disposal</span><span className="mt-1 block text-xs opacity-70">Dumpster, dump runs</span></button>
-              <button className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-4 text-left text-emerald-50" onClick={() => quickAddExpense('Lodging', 'Temporary living expense', 180)} type="button"><span className="block font-medium">Living expense</span><span className="mt-1 block text-xs opacity-70">Hotel, meals, laundry</span></button>
-              <button className="rounded-2xl border border-purple-400/25 bg-purple-400/10 px-4 py-4 text-left text-purple-50" onClick={() => quickAddExpense('Other', 'Miscellaneous expense', 50)} type="button"><span className="block font-medium">Other / Misc</span><span className="mt-1 block text-xs opacity-70">Storage, pet care, etc</span></button>
+            <div className={`rounded-3xl border px-5 py-5 ${current.theme.wrapper}`}>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className={`text-xs font-medium uppercase tracking-[0.2em] ${current.theme.accentText}`}>Step 9 · {expenseSubStep} of 5</p>
+                  <h3 className="mt-2 text-xl font-semibold text-white">{current.title}</h3>
+                  <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-200">{current.helper}</p>
+                </div>
+                <button
+                  className={`rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${current.theme.accentButton}`}
+                  onClick={() => quickAddExpense(current.defaultCategory, `New ${current.title} entry`, 0)}
+                  type="button"
+                >
+                  + Add Entry
+                </button>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2">
+                {steps9.map((s) => (
+                  <button
+                    key={s.key}
+                    className={`h-2 w-2 rounded-full transition-colors ${s.key === expenseSubStep ? 'bg-white' : 'bg-white/30 hover:bg-white/50'}`}
+                    onClick={() => setExpenseSubStep(s.key)}
+                    title={`${s.key} of 5: ${s.title}`}
+                    type="button"
+                  />
+                ))}
+                <span className="ml-2 text-xs text-slate-300">{current.subtitle}</span>
+              </div>
             </div>
-            {(() => {
-              const total = getExpensesTotal(data.expenses)
-              const expenseList = getExpenseEntriesByCategory(data.expenses)
-              return (
-                <>
-                  {total > 0 ? <p className="text-sm font-medium text-emerald-400">Running total: {formatCurrency(total)}</p> : null}
-                  {expenseList.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-medium text-slate-300">Added Expenses</h4>
-                      {expenseList.map((expense) => (
-                        <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
-                          <div>
-                            <p className="text-sm font-medium text-white">{expense.description || expense.category || 'Expense'}</p>
-                            <p className="text-xs text-slate-400">{expense.category} · {formatCurrency(Number(expense.amount || expense.totalAmount || 0))}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
-                              onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }}
-                              type="button"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
-                              onClick={() => updateData((current) => ({ ...current, expenses: removeExpenseEntry(current.expenses, expense) }))}
-                              type="button"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+
+            {expenseSubStep === 1 && (
+              <WeatherCard address={data.dashboard.insuredAddress || data.claim.propertyAddress || ''} dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss || ''} utilityDateRanges={utilityRanges} />
+            )}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium text-slate-300">Entries</h4>
+                <p className="text-sm font-semibold text-emerald-400">Subtotal: {formatCurrency(subtotal)}</p>
+              </div>
+
+              {current.entries.length ? (
+                <div className="space-y-2">
+                  {current.entries.map((expense) => (
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
+                      <div>
+                        <p className="text-sm font-medium text-white">{expense.description || expense.category || 'Expense'}</p>
+                        <p className="text-xs text-slate-400">{expense.category} · {formatCurrency(Number(expense.amount || expense.totalAmount || 0))}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                          onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }}
+                          type="button"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
+                          onClick={() => updateData((currentData) => ({ ...currentData, expenses: removeExpenseEntry(currentData.expenses, expense) }))}
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </>
-              )
-            })()}
-            <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add expenses later →</button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
+                  <p className="text-sm text-slate-400">No entries in this category yet.</p>
+                  <button className="mt-4 text-xs text-slate-500 hover:text-slate-300" onClick={goNext} type="button">Skip — nothing to add →</button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <button className="text-xs text-slate-500 hover:text-slate-300" onClick={goBack} type="button">← Back</button>
+              <div className="flex items-center gap-4">
+                {current.entries.length ? (
+                  <button className="text-xs text-slate-500 hover:text-slate-300" onClick={goNext} type="button">Skip — nothing to add →</button>
+                ) : null}
+                <button className="button-primary" onClick={goNext} type="button">
+                  Next: {nextLabel} →
+                </button>
+              </div>
+            </div>
+
             <ExpenseModal
               expense={editingExpense}
               onClose={() => { setExpenseModalOpen(false); setEditingExpense(null) }}
               onSave={(expense) => {
                 const isNew = !getExpenseEntriesByCategory(data.expenses).some((e) => String(e.id) === String(expense.id))
-                updateData((current) => ({
-                  ...current,
-                  expenses: upsertExpenseEntry(current.expenses, expense),
+                updateData((currentData) => ({
+                  ...currentData,
+                  expenses: upsertExpenseEntry(currentData.expenses, expense),
                 }))
                 setExpenseModalOpen(false)
                 setEditingExpense(null)
@@ -970,6 +1096,7 @@ export function WizardSteps() {
             />
           </div>
         )
+      }
       case 10:
         return (
           <div className="grid gap-5 lg:grid-cols-[0.9fr,1.1fr]">
