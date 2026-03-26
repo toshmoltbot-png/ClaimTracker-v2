@@ -12,10 +12,12 @@ function CommunicationCard({
   communication,
   onEdit,
   onDraft,
+  onDelete,
 }: {
   communication: Communication
   onEdit: () => void
   onDraft: () => void
+  onDelete: () => void
 }) {
   return (
     <article className="rounded-2xl border border-[color:var(--border)] bg-slate-950/35 p-5">
@@ -33,6 +35,9 @@ function CommunicationCard({
           </button>
           <button className="button-secondary" onClick={onEdit} type="button">
             Edit
+          </button>
+          <button className="button-secondary text-rose-400 hover:text-rose-300" onClick={onDelete} type="button">
+            Delete
           </button>
         </div>
       </div>
@@ -120,6 +125,10 @@ export function Communications() {
           <CommunicationCard
             communication={communication}
             key={communication.id}
+            onDelete={() => updateData((current) => ({
+              ...current,
+              communications: current.communications.filter((c) => String(c.id) !== String(communication.id)),
+            }))}
             onDraft={() => setEmailCommunication(communication)}
             onEdit={() => {
               setEditingCommunication(communication)

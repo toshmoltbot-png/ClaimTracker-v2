@@ -55,16 +55,28 @@ export function Payments() {
                 </p>
                 {payment.notes || payment.description ? <p className="mt-3 text-sm leading-7 text-slate-300">{payment.notes || payment.description}</p> : null}
               </div>
-              <button
-                className="button-secondary"
-                onClick={() => {
-                  setEditingPayment(payment)
-                  setModalOpen(true)
-                }}
-                type="button"
-              >
-                Edit
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="button-secondary"
+                  onClick={() => {
+                    setEditingPayment(payment)
+                    setModalOpen(true)
+                  }}
+                  type="button"
+                >
+                  Edit
+                </button>
+                <button
+                  className="button-secondary text-rose-400 hover:text-rose-300"
+                  onClick={() => updateData((current) => ({
+                    ...current,
+                    payments: current.payments.filter((p) => String(p.id) !== String(payment.id)),
+                  }))}
+                  type="button"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </article>
         )) : <EmptyState body="Log the first carrier payment to start the running total." title="No Payments Yet" />}

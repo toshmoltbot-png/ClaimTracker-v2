@@ -78,7 +78,33 @@ export function PhotoLibrary() {
 
       <section className="panel px-5 py-5">
         {filtered.length ? (
-          <PhotoGrid onPreview={setPreviewing} photos={filtered} />
+          <PhotoGrid
+            onPreview={setPreviewing}
+            onDelete={(photo) => {
+              updateData((current) => {
+                const photoId = String(photo.photo?.id || photo.id || '')
+                if (photo.sourceType === 'library') {
+                  return { ...current, photoLibrary: current.photoLibrary.filter((p) => String(p.id) !== photoId) }
+                }
+                if (photo.sourceType === 'room' && photo.roomId) {
+                  return {
+                    ...current,
+                    rooms: current.rooms.map((room) =>
+                      String(room.id) === String(photo.roomId)
+                        ? { ...room, photos: (room.photos || []).filter((p) => String(p.id) !== photoId) }
+                        : room,
+                    ),
+                  }
+                }
+                if (photo.sourceType === 'ai') {
+                  return { ...current, aiPhotos: (current.aiPhotos || []).filter((p) => String(p.id) !== photoId) }
+                }
+                return current
+              })
+              pushToast('Photo deleted.', 'success')
+            }}
+            photos={filtered}
+          />
         ) : (
           <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-10 text-center text-sm text-slate-400">
             No photos match the current filter.
@@ -110,6 +136,37 @@ export function PhotoLibrary() {
                     Open AI Result
                   </button>
                 ) : null}
+                <button
+                  className="button-secondary text-rose-400 hover:text-rose-300"
+                  onClick={() => {
+                    const photo = previewing
+                    updateData((current) => {
+                      const photoId = String(photo.photo?.id || photo.id || '')
+                      if (photo.sourceType === 'library') {
+                        return { ...current, photoLibrary: current.photoLibrary.filter((p) => String(p.id) !== photoId) }
+                      }
+                      if (photo.sourceType === 'room' && photo.roomId) {
+                        return {
+                          ...current,
+                          rooms: current.rooms.map((room) =>
+                            String(room.id) === String(photo.roomId)
+                              ? { ...room, photos: (room.photos || []).filter((p) => String(p.id) !== photoId) }
+                              : room,
+                          ),
+                        }
+                      }
+                      if (photo.sourceType === 'ai') {
+                        return { ...current, aiPhotos: (current.aiPhotos || []).filter((p) => String(p.id) !== photoId) }
+                      }
+                      return current
+                    })
+                    pushToast('Photo deleted.', 'success')
+                    setPreviewing(null)
+                  }}
+                  type="button"
+                >
+                  Delete
+                </button>
                 <button className="button-primary" onClick={() => setPreviewing(null)} type="button">
                   Close
                 </button>

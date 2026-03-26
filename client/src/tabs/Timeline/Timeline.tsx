@@ -128,7 +128,7 @@ export function Timeline() {
                     </div>
                     {event.description ? <p className="mt-3 text-sm leading-7 text-slate-300">{event.description}</p> : null}
                     {(data.timeline || []).some((item) => String(item.id) === String(event.id)) ? (
-                      <div className="mt-4">
+                      <div className="mt-4 flex gap-2">
                         <button
                           className="button-secondary"
                           onClick={() => {
@@ -137,7 +137,17 @@ export function Timeline() {
                           }}
                           type="button"
                         >
-                          Edit Manual Event
+                          Edit
+                        </button>
+                        <button
+                          className="button-secondary text-rose-400 hover:text-rose-300"
+                          onClick={() => updateData((current) => ({
+                            ...current,
+                            timeline: (current.timeline || []).filter((t) => String(t.id) !== String(event.id)),
+                          }))}
+                          type="button"
+                        >
+                          Delete
                         </button>
                       </div>
                     ) : null}

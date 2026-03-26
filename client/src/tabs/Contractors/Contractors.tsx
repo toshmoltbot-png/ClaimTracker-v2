@@ -139,16 +139,28 @@ export function Contractors() {
                   <p className="mt-2 text-sm text-slate-400">{[contractor.trade, contractor.contact || contractor.contactName, contractor.phone].filter(Boolean).join(' · ')}</p>
                   {contractor.email ? <p className="mt-1 text-sm text-slate-400">{contractor.email}</p> : null}
                 </div>
-                <button
-                  className="button-secondary"
-                  onClick={() => {
-                    setEditingContractor(contractor)
-                    setModalOpen(true)
-                  }}
-                  type="button"
-                >
-                  Edit
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    className="button-secondary"
+                    onClick={() => {
+                      setEditingContractor(contractor)
+                      setModalOpen(true)
+                    }}
+                    type="button"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="button-secondary text-rose-400 hover:text-rose-300"
+                    onClick={() => updateData((current) => ({
+                      ...current,
+                      contractors: current.contractors.filter((c) => String(c.id) !== String(contractor.id)),
+                    }))}
+                    type="button"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
               {contractor.notes ? <p className="mt-4 text-sm leading-7 text-slate-300">{contractor.notes}</p> : null}
             </article>
@@ -170,11 +182,23 @@ export function Contractors() {
                         .join(' · ')}
                     </p>
                   </div>
-                  {report.url ? (
-                    <a className="button-secondary" href={report.url} rel="noreferrer" target="_blank">
-                      Open File
-                    </a>
-                  ) : null}
+                  <div className="flex gap-2">
+                    {report.url ? (
+                      <a className="button-secondary" href={report.url} rel="noreferrer" target="_blank">
+                        Open File
+                      </a>
+                    ) : null}
+                    <button
+                      className="button-secondary text-rose-400 hover:text-rose-300"
+                      onClick={() => updateData((current) => ({
+                        ...current,
+                        contractorReports: current.contractorReports.filter((r) => String(r.id) !== String(report.id)),
+                      }))}
+                      type="button"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
                 {summary.findings.length ? (
                   <div className="mt-4 space-y-2">

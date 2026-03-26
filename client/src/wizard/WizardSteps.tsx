@@ -25,6 +25,8 @@ import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import type { AnalysisMode, ExpenseEntry, FileItem, Receipt, Room } from '@/types/claim'
 import { FloorPlanCanvas } from '@/tabs/FloorPlan/FloorPlanCanvas'
+import { ReceiptModal } from '@/tabs/Receipts/ReceiptModal'
+import { ExpenseModal } from '@/tabs/Expenses/ExpenseModal'
 import { WeatherCard } from '@/tabs/Expenses/WeatherCard'
 
 const steps = [
@@ -89,6 +91,9 @@ export function WizardSteps() {
   const [preScreenModes, setPreScreenModes] = useState<Record<string, AnalysisMode>>({})
   const [policyUploadStatus, setPolicyUploadStatus] = useState<string>('')
   const [receiptParsing, setReceiptParsing] = useState<string>('')
+  const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null)
+  const [editingExpense, setEditingExpense] = useState<ExpenseEntry | null>(null)
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false)
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`📄 ${file.name} — processing...`)
@@ -187,10 +192,19 @@ export function WizardSteps() {
       pushToast('Enter a room name before adding it.', 'warning')
       return
     }
-    updateData((current) => ({
-      ...current,
-      rooms: [...current.rooms, updateRoomDimensions({ ...roomDraft, id: crypto.randomUUID() })],
-    }))
+    const isEditing = data.rooms.some((r) => r.id === roomDraft.id)
+    if (isEditing) {
+      updateData((current) => ({
+        ...current,
+        rooms: current.rooms.map((r) => r.id === roomDraft.id ? updateRoomDimensions({ ...roomDraft }) : r),
+      }))
+      pushToast('Room updated.', 'success')
+    } else {
+      updateData((current) => ({
+        ...current,
+        rooms: [...current.rooms, updateRoomDimensions({ ...roomDraft, id: crypto.randomUUID() })],
+      }))
+    }
     setRoomDraft(buildRoomDraft())
   }
 
@@ -468,8 +482,13 @@ export function WizardSteps() {
               </div>
               <textarea className="field min-h-24" onChange={(event) => setRoomDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes" value={roomDraft.notes || ''} />
               <button className="button-primary w-full" onClick={addRoom} type="button">
-                Add Room
+                {data.rooms.some((r) => r.id === roomDraft.id) ? 'Update Room' : 'Add Room'}
               </button>
+              {data.rooms.some((r) => r.id === roomDraft.id) && (
+                <button className="mt-1 text-xs text-slate-400 hover:text-white transition-colors" onClick={() => setRoomDraft(buildRoomDraft())} type="button">
+                  Cancel editing
+                </button>
+              )}
             </div>
             <div className="space-y-3">
               {data.rooms.length ? data.rooms.map((room) => (
@@ -479,9 +498,14 @@ export function WizardSteps() {
                       <p className="font-semibold text-white">{room.name || 'Room'}</p>
                       <p className="mt-1 text-sm text-slate-400">{room.dimensions || 'No dimensions yet'} · {(room.photos || []).length} photos</p>
                     </div>
-                    <button className="button-secondary" onClick={() => updateData((current) => ({ ...current, rooms: current.rooms.filter((entry) => entry.id !== room.id) }))} type="button">
-                      Remove
-                    </button>
+                    <div className="flex gap-2">
+                      <button className="button-secondary" onClick={() => setRoomDraft({ ...room })} type="button">
+                        Edit
+                      </button>
+                      <button className="button-secondary text-rose-400 hover:text-rose-300" onClick={() => updateData((current) => ({ ...current, rooms: current.rooms.filter((entry) => entry.id !== room.id) }))} type="button">
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 </div>
               )) : <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-10 text-center text-sm text-slate-400">No rooms added yet.</div>}
@@ -785,20 +809,42 @@ export function WizardSteps() {
                     {receipt.dataUrl && (
                       <img alt={receipt.store || 'Receipt'} className="mt-3 max-h-32 rounded-xl border border-[color:var(--border)] object-contain" src={String(receipt.dataUrl)} />
                     )}
-                    <button
-                      className="mt-3 text-xs text-rose-400 hover:text-rose-300 transition-colors"
-                      onClick={() => {
-                        updateData((current) => syncClaimReceipts({ ...current, receipts: current.receipts.filter((r) => String(r.id) !== String(receipt.id)) }))
-                        pushToast('Receipt deleted.', 'success')
-                      }}
-                      type="button"
-                    >
-                      ✕ Delete
-                    </button>
+                    <div className="mt-3 flex gap-3">
+                      <button
+                        className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                        onClick={() => setEditingReceipt(receipt)}
+                        type="button"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
+                        onClick={() => {
+                          updateData((current) => syncClaimReceipts({ ...current, receipts: current.receipts.filter((r) => String(r.id) !== String(receipt.id)) }))
+                          pushToast('Receipt deleted.', 'success')
+                        }}
+                        type="button"
+                      >
+                        ✕ Delete
+                      </button>
+                    </div>
                   </div>
                 )
               }) : <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-10 text-center text-sm text-slate-400">No receipts uploaded yet. AI will extract store, date, and line items automatically.</div>}
             </div>
+            <ReceiptModal
+              onClose={() => setEditingReceipt(null)}
+              onSave={(receipt) => {
+                updateData((current) => syncClaimReceipts({
+                  ...current,
+                  receipts: current.receipts.map((r) => String(r.id) === String(receipt.id) ? receipt : r),
+                }))
+                setEditingReceipt(null)
+                pushToast('Receipt updated.', 'success')
+              }}
+              open={Boolean(editingReceipt)}
+              receipt={editingReceipt}
+            />
           </div>
         )
       case 8:
@@ -842,7 +888,50 @@ export function WizardSteps() {
               <button className="rounded-2xl border border-purple-400/25 bg-purple-400/10 px-4 py-4 text-left text-purple-50" onClick={() => quickAddExpense('Other', 'Miscellaneous expense', 50)} type="button"><span className="block font-medium">Other / Misc</span><span className="mt-1 block text-xs opacity-70">Storage, pet care, etc</span></button>
             </div>
             {(() => { const total = getExpensesTotal(data.expenses); return total > 0 ? <p className="text-sm font-medium text-emerald-400">Running total: {formatCurrency(total)}</p> : null })()}
+            {data.expenses.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-slate-300">Added Expenses</h4>
+                {data.expenses.map((expense) => (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
+                    <div>
+                      <p className="text-sm font-medium text-white">{expense.description || expense.category || 'Expense'}</p>
+                      <p className="text-xs text-slate-400">{expense.category} · {formatCurrency(Number(expense.amount || expense.totalAmount || 0))}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                        onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
+                        onClick={() => updateData((current) => ({ ...current, expenses: current.expenses.filter((e) => String(e.id) !== String(expense.id)) }))}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add expenses later →</button>
+            <ExpenseModal
+              expense={editingExpense}
+              onClose={() => { setExpenseModalOpen(false); setEditingExpense(null) }}
+              onSave={(expense) => {
+                updateData((current) => ({
+                  ...current,
+                  expenses: current.expenses.map((e) => String(e.id) === String(expense.id) ? expense : e),
+                }))
+                setExpenseModalOpen(false)
+                setEditingExpense(null)
+                pushToast('Expense updated.', 'success')
+              }}
+              open={expenseModalOpen}
+            />
           </div>
         )
       case 10:
