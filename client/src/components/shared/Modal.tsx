@@ -1,4 +1,4 @@
-import { useEffect, type PropsWithChildren, type ReactNode } from 'react'
+import { useEffect, useRef, type PropsWithChildren, type ReactNode } from 'react'
 
 interface ModalProps extends PropsWithChildren {
   open: boolean
@@ -8,6 +8,8 @@ interface ModalProps extends PropsWithChildren {
 }
 
 export function Modal({ open, title, onClose, footer, children }: ModalProps) {
+  const mouseDownOnBackdrop = useRef(false)
+
   useEffect(() => {
     if (!open) return
     const previous = document.body.style.overflow
@@ -30,7 +32,15 @@ export function Modal({ open, title, onClose, footer, children }: ModalProps) {
     <div
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/75 px-0 py-0 sm:items-center sm:px-4 sm:py-8"
-      onClick={onClose}
+      onMouseDown={(event) => {
+        mouseDownOnBackdrop.current = event.target === event.currentTarget
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && mouseDownOnBackdrop.current) {
+          onClose()
+        }
+        mouseDownOnBackdrop.current = false
+      }}
       role="dialog"
     >
       <div

@@ -71,8 +71,8 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
             </select>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-200">Vendor</span>
-            <input className="field" onChange={(event) => setDraft((current) => ({ ...current, vendor: event.target.value }))} value={draft.vendor || ''} />
+            <span className="text-sm font-medium text-slate-200">{isLabor ? 'Who did the work?' : 'Vendor'}</span>
+            <input className="field" onChange={(event) => setDraft((current) => ({ ...current, vendor: event.target.value }))} placeholder={isLabor ? 'e.g. Rich Archer, family member' : ''} value={draft.vendor || ''} />
           </label>
 
           {!usesDateRange ? (
