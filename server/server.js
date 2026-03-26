@@ -1402,9 +1402,9 @@ app.post("/api/pre-screen-photos", rateLimiter, async (req, res) => {
 
 app.post("/api/analyze-receipt", rateLimiter, async (req, res) => {
     try {
-        const { imageBase64, mimeType } = req.body || {};
-        if (!imageBase64 || !mimeType) {
-            return res.status(400).json({ success: false, error: "imageBase64 and mimeType are required" });
+        const { imageBase64, mimeType, text } = req.body || {};
+        if (!imageBase64 && !text) {
+            return res.status(400).json({ success: false, error: "imageBase64 or text is required" });
         }
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) {
@@ -1414,15 +1414,17 @@ app.post("/api/analyze-receipt", rateLimiter, async (req, res) => {
         const requestId = crypto.randomUUID();
         const log = (obj) => console.log(JSON.stringify({ ...obj, requestId, provider: VISION_UPSTREAM_PROVIDER, endpoint: VISION_UPSTREAM_ENDPOINT }));
         const prompt = buildReceiptPrompt();
+        
+        let content = [{ type: "text", text: prompt }];
+        if (text) {
+            content.push({ type: "text", text: "\n\nDOCUMENT TEXT:\n" + text });
+        } else if (imageBase64 && mimeType) {
+            content.push({ type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } });
+        }
+
         const messages = [
             { role: "system", content: "You are a receipt extraction assistant. Follow instructions exactly." },
-            {
-                role: "user",
-                content: [
-                    { type: "text", text: prompt },
-                    { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } }
-                ]
-            }
+            { role: "user", content }
         ];
         const parsed = await requestOpenAIJson({
             messages,

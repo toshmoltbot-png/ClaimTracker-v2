@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { formatCurrency, addReceiptItemsToInventory, getReceiptItems, normalizeReceiptPayload, syncClaimReceipts } from '@/lib/claimWorkflow'
 import { compressImageToDataUrl, dataUrlToBase64, readFileAsDataUrl } from '@/lib/utils'
+import { extractPolicyText } from '@/lib/policyParser'
 import { apiClient } from '@/lib/api'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
@@ -29,11 +30,15 @@ export function Receipts() {
     setUploading(true)
     try {
       for (const file of files) {
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+        const text = isPdf ? await extractPolicyText(file) : undefined
         const dataUrl = await buildReceiptDataUrl(file)
+
         const payload = await apiClient.analyzeReceipt({
-          imageBase64: dataUrlToBase64(dataUrl),
-          receiptBase64: dataUrlToBase64(dataUrl),
+          imageBase64: isPdf ? undefined : dataUrlToBase64(dataUrl),
+          receiptBase64: isPdf ? undefined : dataUrlToBase64(dataUrl),
           mimeType: file.type || 'application/octet-stream',
+          text,
         })
         const receipt = normalizeReceiptPayload(payload, { name: file.name, type: file.type })
         receipt.dataUrl = dataUrl

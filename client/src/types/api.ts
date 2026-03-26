@@ -60,6 +60,7 @@ export interface AnalyzeReceiptRequest {
   receiptBase64?: string
   imageBase64?: string
   mimeType?: string
+  text?: string
   [key: string]: unknown
 }
 

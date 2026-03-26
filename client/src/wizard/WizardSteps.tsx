@@ -273,11 +273,16 @@ export function WizardSteps() {
       const { file, previewUrl } = files[i]
       setReceiptParsing(`Parsing receipt ${i + 1} of ${files.length}: ${file.name}…`)
       try {
-        const dataUrl = file.type.startsWith('image/') ? previewUrl : await buildReceiptDataUrl(file)
+        const isImage = file.type.startsWith('image/')
+        const dataUrl = isImage ? previewUrl : await buildReceiptDataUrl(file)
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+        const text = isPdf ? await extractPolicyText(file) : undefined
+
         const payload = await apiClient.analyzeReceipt({
-          imageBase64: dataUrlToBase64(dataUrl),
-          receiptBase64: dataUrlToBase64(dataUrl),
+          imageBase64: isPdf ? undefined : dataUrlToBase64(dataUrl),
+          receiptBase64: isPdf ? undefined : dataUrlToBase64(dataUrl),
           mimeType: file.type || 'application/octet-stream',
+          text,
         })
         const receipt = normalizeReceiptPayload(payload, { name: file.name, type: file.type })
         receipt.dataUrl = dataUrl
