@@ -331,11 +331,8 @@ export function WizardSteps() {
       dateStart: data.dashboard.dateOfLoss || data.claim.dateOfLoss || '',
       dateEnd: data.dashboard.dateOfLoss || data.claim.dateOfLoss || '',
     }
-    updateData((current) => ({
-      ...current,
-      expenses: upsertExpenseEntry(current.expenses, next),
-    }))
-    pushToast(`${category} expense added.`, 'success')
+    setEditingExpense(next)
+    setExpenseModalOpen(true)
   }
 
   function launchAI() {
@@ -960,13 +957,14 @@ export function WizardSteps() {
               expense={editingExpense}
               onClose={() => { setExpenseModalOpen(false); setEditingExpense(null) }}
               onSave={(expense) => {
+                const isNew = !getExpenseEntriesByCategory(data.expenses).some((e) => String(e.id) === String(expense.id))
                 updateData((current) => ({
                   ...current,
                   expenses: upsertExpenseEntry(current.expenses, expense),
                 }))
                 setExpenseModalOpen(false)
                 setEditingExpense(null)
-                pushToast('Expense updated.', 'success')
+                pushToast(isNew ? 'Expense added.' : 'Expense updated.', 'success')
               }}
               open={expenseModalOpen}
             />
