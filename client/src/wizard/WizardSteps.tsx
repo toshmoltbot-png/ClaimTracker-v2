@@ -16,7 +16,9 @@ import {
   upsertExpenseEntry,
   updateRoomDimensions,
 } from '@/lib/claimWorkflow'
-import { compressImageToDataUrl, readFileAsDataUrl } from '@/lib/utils'
+import { compressImageToDataUrl, dataUrlToBase64, readFileAsDataUrl } from '@/lib/utils'
+import { apiClient } from '@/lib/api'
+import { normalizeReceiptPayload, getReceiptItems } from '@/lib/claimWorkflow'
 import { extractPolicyText, parsePolicyFields } from '@/lib/policyParser'
 import { storeDataUrl, storeMediaFile, uploadFile } from '@/lib/firebase'
 import { useClaimStore } from '@/store/claimStore'
@@ -86,6 +88,7 @@ export function WizardSteps() {
   const [tipDismissed, setTipDismissed] = useState(false)
   const [preScreenModes, setPreScreenModes] = useState<Record<string, AnalysisMode>>({})
   const [policyUploadStatus, setPolicyUploadStatus] = useState<string>('')
+  const [receiptParsing, setReceiptParsing] = useState<string>('')
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`📄 ${file.name} — processing...`)
@@ -250,8 +253,22 @@ export function WizardSteps() {
   }
 
   async function uploadReceipts(files: Array<{ file: File; previewUrl: string }>) {
-    const receipts = await Promise.all(
-      files.map(async ({ file, previewUrl }) => {
+    for (let i = 0; i < files.length; i++) {
+      const { file, previewUrl } = files[i]
+      setReceiptParsing(`Parsing receipt ${i + 1} of ${files.length}: ${file.name}…`)
+      try {
+        const dataUrl = file.type.startsWith('image/') ? previewUrl : await buildReceiptDataUrl(file)
+        const payload = await apiClient.analyzeReceipt({
+          imageBase64: dataUrlToBase64(dataUrl),
+          receiptBase64: dataUrlToBase64(dataUrl),
+          mimeType: file.type || 'application/octet-stream',
+        })
+        const receipt = normalizeReceiptPayload(payload, { name: file.name, type: file.type })
+        receipt.dataUrl = dataUrl
+        receipt.url = dataUrl
+        updateData((current) => syncClaimReceipts({ ...current, receipts: [receipt, ...current.receipts] }))
+      } catch (err) {
+        // If AI parsing fails, still save the receipt with raw data
         const dataUrl = file.type.startsWith('image/') ? previewUrl : await buildReceiptDataUrl(file)
         const receipt: Receipt = {
           id: crypto.randomUUID(),
@@ -270,11 +287,12 @@ export function WizardSteps() {
           addedToInventory: false,
           inventoryItemIds: [],
         }
-        return receipt
-      }),
-    )
-    updateData((current) => syncClaimReceipts({ ...current, receipts: [...receipts, ...current.receipts] }))
-    pushToast(`${receipts.length} receipt${receipts.length === 1 ? '' : 's'} added.`, 'success')
+        updateData((current) => syncClaimReceipts({ ...current, receipts: [receipt, ...current.receipts] }))
+        pushToast(`⚠️ Could not parse ${file.name} — saved without extraction.`, 'error')
+      }
+    }
+    setReceiptParsing('')
+    pushToast(`${files.length} receipt${files.length === 1 ? '' : 's'} processed.`, 'success')
   }
 
   function quickAddExpense(category: ExpenseEntry['category'], description: string, amount: number) {
@@ -742,14 +760,34 @@ export function WizardSteps() {
       case 7:
         return (
           <div className="space-y-5">
-            <PhotoUploader label="Upload receipts" onFilesSelected={(files) => void uploadReceipts(files)} />
+            <PhotoUploader label="Upload receipts (photos or PDFs)" onFilesSelected={(files) => void uploadReceipts(files)} />
+            {receiptParsing && (
+              <div className="flex items-center gap-3 rounded-2xl border border-sky-500/30 bg-sky-950/30 px-4 py-3">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
+                <p className="text-sm text-sky-300">{receiptParsing}</p>
+              </div>
+            )}
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {data.receipts.length ? data.receipts.map((receipt) => (
-                <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4" key={String(receipt.id)}>
-                  <p className="truncate font-semibold text-white">{receipt.fileName || receipt.name || 'Receipt'}</p>
-                  <p className="mt-1 text-sm text-slate-400">{receipt.purchaseDate || receipt.date || 'No date yet'}</p>
-                </div>
-              )) : <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-10 text-center text-sm text-slate-400">No receipts uploaded yet.</div>}
+              {data.receipts.length ? data.receipts.map((receipt) => {
+                const items = getReceiptItems(receipt)
+                const total = Number(receipt.receiptTotal || 0)
+                const parsed = Boolean(receipt.store || items.length)
+                return (
+                  <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4" key={String(receipt.id)}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate font-semibold text-white">{receipt.store || receipt.fileName || receipt.name || 'Receipt'}</p>
+                      {parsed && <span className="shrink-0 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Parsed</span>}
+                    </div>
+                    <p className="mt-1 text-sm text-slate-400">{receipt.purchaseDate || receipt.date || 'No date'}</p>
+                    {items.length > 0 && (
+                      <p className="mt-1 text-xs text-slate-500">{items.length} item{items.length === 1 ? '' : 's'} · {formatCurrency(total)}</p>
+                    )}
+                    {receipt.dataUrl && (
+                      <img alt={receipt.store || 'Receipt'} className="mt-3 max-h-32 rounded-xl border border-[color:var(--border)] object-contain" src={String(receipt.dataUrl)} />
+                    )}
+                  </div>
+                )
+              }) : <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-10 text-center text-sm text-slate-400">No receipts uploaded yet. AI will extract store, date, and line items automatically.</div>}
             </div>
           </div>
         )
