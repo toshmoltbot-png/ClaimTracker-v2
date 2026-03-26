@@ -1,32 +1,11 @@
 import { useMemo, useState } from 'react'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { apiClient } from '@/lib/api'
-import { getContractorFindings, normalizeContractorDraft } from '@/lib/claimWorkflow'
+import { getContractorFindings, normalizeContractorDraft, uploadAndAnalyzeContractorReport } from '@/lib/claimWorkflow'
 import { fmtUSDate } from '@/lib/dates'
-import { uploadFile } from '@/lib/firebase'
 import { upsertById } from '@/lib/utils'
 import { useClaimStore } from '@/store/claimStore'
 import type { Contractor, ContractorReport } from '@/types/claim'
 import { ContractorModal } from '@/tabs/Contractors/ContractorModal'
-
-async function analyzeFile(file: File, uploadedUrl: string | undefined) {
-  const mimeType = file.type || 'application/octet-stream'
-  const canReadText = mimeType.startsWith('text/') || /\.(txt|md|csv|json)$/i.test(file.name)
-  const text = canReadText ? await file.text() : ''
-  try {
-    return await apiClient.analyzeContractorReport({
-      text,
-      fileName: file.name,
-      mimeType,
-      documentUrl: uploadedUrl,
-    })
-  } catch {
-    return {
-      structuredFindings: text ? text.split(/\n+/).map((entry) => entry.trim()).filter(Boolean).slice(0, 5) : [`Uploaded ${file.name}`],
-      recommendations: ['Review the report against the contractor scope and estimate.'],
-    }
-  }
-}
 
 export function Contractors() {
   const data = useClaimStore((state) => state.data)
@@ -43,24 +22,7 @@ export function Contractors() {
     if (!file) return
     setUploading(true)
     try {
-      const uploaded = await uploadFile(file, 'contractor-reports')
-      const analysis = await analyzeFile(file, uploaded.url || undefined)
-      const report: ContractorReport = {
-        id: crypto.randomUUID(),
-        ...uploaded,
-        companyName: String(analysis.companyName || ''),
-        contactName: String(analysis.contactName || ''),
-        trade: String(analysis.trade || analysis.damageCategory || ''),
-        structuredFindings: Array.isArray(analysis.structuredFindings) ? analysis.structuredFindings : analysis.findings || [],
-        recommendations: Array.isArray(analysis.recommendations) ? analysis.recommendations : [],
-        workDescription: String(analysis.workDescription || ''),
-        serviceStartDate: String(analysis.serviceStartDate || ''),
-        serviceEndDate: String(analysis.serviceEndDate || ''),
-        totalAmount: Number(analysis.totalAmount || 0),
-        amount: Number(analysis.totalAmount || 0),
-        affectedRooms: Array.isArray(analysis.affectedRooms) ? analysis.affectedRooms : [],
-        keyLineItems: Array.isArray(analysis.keyLineItems) ? analysis.keyLineItems : [],
-      }
+      const report = await uploadAndAnalyzeContractorReport(file)
 
       updateData((current) => {
         const contractorName = report.companyName || file.name.replace(/\.[^.]+$/, '')

@@ -1,6 +1,48 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { apiClient } from '@/lib/api'
+import { uploadFile } from '@/lib/firebase'
+
+export async function uploadAndAnalyzeContractorReport(file: File) {
+  const mimeType = file.type || 'application/octet-stream'
+  const canReadText = mimeType.startsWith('text/') || /\.(txt|md|csv|json)$/i.test(file.name)
+  const text = canReadText ? await file.text() : ''
+  const uploaded = await uploadFile(file, 'contractor-reports')
+  
+  let analysis: Record<string, any> = {}
+  try {
+    analysis = await apiClient.analyzeContractorReport({
+      text,
+      fileName: file.name,
+      mimeType,
+      documentUrl: uploaded.url || undefined,
+    })
+  } catch (err) {
+    console.warn('Contractor report AI analysis failed, falling back to basic metadata:', err)
+    analysis = {
+      structuredFindings: text ? text.split(/\n+/).map((e) => e.trim()).filter(Boolean).slice(0, 5) : [`Uploaded ${file.name}`],
+      recommendations: ['Review the report against the contractor scope and estimate.'],
+    }
+  }
+
+  const report: ContractorReport = {
+    id: crypto.randomUUID(),
+    ...uploaded,
+    companyName: String(analysis.companyName || ''),
+    contactName: String(analysis.contactName || ''),
+    trade: String(analysis.trade || analysis.damageCategory || ''),
+    structuredFindings: Array.isArray(analysis.structuredFindings) ? analysis.structuredFindings : analysis.findings || [],
+    recommendations: Array.isArray(analysis.recommendations) ? analysis.recommendations : [],
+    workDescription: String(analysis.workDescription || ''),
+    serviceStartDate: String(analysis.serviceStartDate || ''),
+    serviceEndDate: String(analysis.serviceEndDate || ''),
+    totalAmount: Number(analysis.totalAmount || 0),
+    amount: Number(analysis.totalAmount || 0),
+    affectedRooms: Array.isArray(analysis.affectedRooms) ? analysis.affectedRooms : [],
+    keyLineItems: Array.isArray(analysis.keyLineItems) ? analysis.keyLineItems : [],
+  }
+  return report
+}
 import { fmtUSDate } from '@/lib/dates'
 import { applyCategory3Rules } from '@/lib/sanitizer'
 import { dataUrlToBase64, upsertById } from '@/lib/utils'

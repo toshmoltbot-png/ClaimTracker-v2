@@ -15,6 +15,7 @@ import {
   getExpensesTotal,
   upsertExpenseEntry,
   updateRoomDimensions,
+  uploadAndAnalyzeContractorReport,
 } from '@/lib/claimWorkflow'
 import { compressImageToDataUrl, dataUrlToBase64, readFileAsDataUrl } from '@/lib/utils'
 import { apiClient } from '@/lib/api'
@@ -91,6 +92,7 @@ export function WizardSteps() {
   const [preScreenModes, setPreScreenModes] = useState<Record<string, AnalysisMode>>({})
   const [policyUploadStatus, setPolicyUploadStatus] = useState<string>('')
   const [receiptParsing, setReceiptParsing] = useState<string>('')
+  const [reportParsing, setReportParsing] = useState<string>('')
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null)
   const [editingExpense, setEditingExpense] = useState<ExpenseEntry | null>(null)
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
@@ -851,25 +853,46 @@ export function WizardSteps() {
         return (
           <div className="space-y-5">
             <h3 className="text-xl font-semibold text-white">Contractor Reports</h3>
-            <p className="text-sm text-slate-300">Upload any remediation or contractor reports (ServPro, Paul Davis, etc). These strengthen your claim documentation.</p>
+            <p className="text-sm text-slate-300">Upload any remediation or contractor reports (ServPro, Paul Davis, etc). AI will automatically extract the contractor name, findings, and costs.</p>
             <PhotoUploader label="Upload contractor reports (PDF/image)" onFilesSelected={async (files) => {
-              for (const { file } of files) {
-                const item = { id: crypto.randomUUID(), name: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), url: '', data: null }
+              for (let i = 0; i < files.length; i++) {
+                const { file } = files[i]
+                setReportParsing(`Parsing report ${i + 1} of ${files.length}: ${file.name}…`)
                 try {
-                  const uploaded = await storeMediaFile(file, { folder: 'contractor-reports' })
-                  Object.assign(item, uploaded)
-                } catch { /* store locally */ }
-                updateData((c) => ({ ...c, contractorReports: [...(c.contractorReports || []), item] }))
+                  const report = await uploadAndAnalyzeContractorReport(file)
+                  updateData((c) => ({ ...c, contractorReports: [...(c.contractorReports || []), report] }))
+                } catch (err) {
+                  console.warn('Report parsing failed', err)
+                  pushToast(`Could not parse ${file.name}`, 'error')
+                }
               }
-              pushToast(`Uploaded ${files.length} report(s).`, 'info')
+              setReportParsing('')
+              pushToast(`Processed ${files.length} report(s).`, 'success')
             }} />
+            {reportParsing && (
+              <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/30 px-4 py-3">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+                <p className="text-sm text-emerald-300">{reportParsing}</p>
+              </div>
+            )}
             <div className="space-y-2">
-              {(data.contractorReports || []).length ? data.contractorReports.map((r) => (
-                <div className="flex items-center justify-between rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(r.id || r.name)}>
-                  <p className="truncate text-sm font-medium text-white">{r.name || 'Report'}</p>
-                  <button className="text-xs text-slate-400 hover:text-rose-400" onClick={() => updateData((c) => ({ ...c, contractorReports: c.contractorReports.filter((x) => x.id !== r.id) }))} type="button">Remove</button>
-                </div>
-              )) : <p className="text-sm text-slate-500">No reports uploaded yet. You can add these later from the Contractors tab.</p>}
+              {(data.contractorReports || []).length ? data.contractorReports.map((r) => {
+                const parsed = Boolean(r.companyName || r.trade)
+                return (
+                  <div className="flex items-center justify-between rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(r.id || r.name)}>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium text-white">{r.companyName || r.name || 'Report'}</p>
+                        {parsed && <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Parsed</span>}
+                      </div>
+                      {(r.trade || r.totalAmount) && (
+                        <p className="mt-1 text-xs text-slate-400">{[r.trade, r.totalAmount ? formatCurrency(r.totalAmount) : ''].filter(Boolean).join(' · ')}</p>
+                      )}
+                    </div>
+                    <button className="text-xs text-rose-400 hover:text-rose-300" onClick={() => updateData((c) => ({ ...c, contractorReports: c.contractorReports.filter((x) => String(x.id) !== String(r.id)) }))} type="button">✕ Delete</button>
+                  </div>
+                )
+              }) : <p className="text-sm text-slate-500">No reports uploaded yet. You can add these later from the Contractors tab.</p>}
             </div>
             <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add these later →</button>
           </div>
