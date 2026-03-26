@@ -16,6 +16,8 @@ import {
   upsertExpenseEntry,
   updateRoomDimensions,
   uploadAndAnalyzeContractorReport,
+  getExpenseEntriesByCategory,
+  removeExpenseEntry,
 } from '@/lib/claimWorkflow'
 import { compressImageToDataUrl, dataUrlToBase64, readFileAsDataUrl } from '@/lib/utils'
 import { apiClient } from '@/lib/api'
@@ -915,36 +917,44 @@ export function WizardSteps() {
               <button className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-4 text-left text-emerald-50" onClick={() => quickAddExpense('Lodging', 'Temporary living expense', 180)} type="button"><span className="block font-medium">Living expense</span><span className="mt-1 block text-xs opacity-70">Hotel, meals, laundry</span></button>
               <button className="rounded-2xl border border-purple-400/25 bg-purple-400/10 px-4 py-4 text-left text-purple-50" onClick={() => quickAddExpense('Other', 'Miscellaneous expense', 50)} type="button"><span className="block font-medium">Other / Misc</span><span className="mt-1 block text-xs opacity-70">Storage, pet care, etc</span></button>
             </div>
-            {(() => { const total = getExpensesTotal(data.expenses); return total > 0 ? <p className="text-sm font-medium text-emerald-400">Running total: {formatCurrency(total)}</p> : null })()}
-            {data.expenses.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium text-slate-300">Added Expenses</h4>
-                {data.expenses.map((expense) => (
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
-                    <div>
-                      <p className="text-sm font-medium text-white">{expense.description || expense.category || 'Expense'}</p>
-                      <p className="text-xs text-slate-400">{expense.category} · {formatCurrency(Number(expense.amount || expense.totalAmount || 0))}</p>
+            {(() => {
+              const total = getExpensesTotal(data.expenses)
+              const expenseList = getExpenseEntriesByCategory(data.expenses)
+              return (
+                <>
+                  {total > 0 ? <p className="text-sm font-medium text-emerald-400">Running total: {formatCurrency(total)}</p> : null}
+                  {expenseList.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium text-slate-300">Added Expenses</h4>
+                      {expenseList.map((expense) => (
+                        <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
+                          <div>
+                            <p className="text-sm font-medium text-white">{expense.description || expense.category || 'Expense'}</p>
+                            <p className="text-xs text-slate-400">{expense.category} · {formatCurrency(Number(expense.amount || expense.totalAmount || 0))}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                              onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }}
+                              type="button"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
+                              onClick={() => updateData((current) => ({ ...current, expenses: removeExpenseEntry(current.expenses, expense) }))}
+                              type="button"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
-                        onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }}
-                        type="button"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
-                        onClick={() => updateData((current) => ({ ...current, expenses: current.expenses.filter((e) => String(e.id) !== String(expense.id)) }))}
-                        type="button"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  )}
+                </>
+              )
+            })()}
             <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add expenses later →</button>
             <ExpenseModal
               expense={editingExpense}
@@ -952,7 +962,7 @@ export function WizardSteps() {
               onSave={(expense) => {
                 updateData((current) => ({
                   ...current,
-                  expenses: current.expenses.map((e) => String(e.id) === String(expense.id) ? expense : e),
+                  expenses: upsertExpenseEntry(current.expenses, expense),
                 }))
                 setExpenseModalOpen(false)
                 setEditingExpense(null)
