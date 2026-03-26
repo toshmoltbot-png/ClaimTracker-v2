@@ -3,10 +3,12 @@ import autoTable from 'jspdf-autotable'
 import { apiClient } from '@/lib/api'
 import { uploadFile } from '@/lib/firebase'
 
+import { extractPolicyText } from '@/lib/policyParser'
+
 export async function uploadAndAnalyzeContractorReport(file: File) {
   const mimeType = file.type || 'application/octet-stream'
-  const canReadText = mimeType.startsWith('text/') || /\.(txt|md|csv|json)$/i.test(file.name)
-  const text = canReadText ? await file.text() : ''
+  const isPdfOrText = mimeType.startsWith('text/') || mimeType.includes('pdf') || /\.(txt|md|csv|json|pdf)$/i.test(file.name)
+  const text = isPdfOrText ? await extractPolicyText(file) : ''
   const uploaded = await uploadFile(file, 'contractor-reports')
   
   let analysis: Record<string, any> = {}
