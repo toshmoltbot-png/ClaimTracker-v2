@@ -785,6 +785,16 @@ export function WizardSteps() {
                     {receipt.dataUrl && (
                       <img alt={receipt.store || 'Receipt'} className="mt-3 max-h-32 rounded-xl border border-[color:var(--border)] object-contain" src={String(receipt.dataUrl)} />
                     )}
+                    <button
+                      className="mt-3 text-xs text-rose-400 hover:text-rose-300 transition-colors"
+                      onClick={() => {
+                        updateData((current) => syncClaimReceipts({ ...current, receipts: current.receipts.filter((r) => String(r.id) !== String(receipt.id)) }))
+                        pushToast('Receipt deleted.', 'success')
+                      }}
+                      type="button"
+                    >
+                      ✕ Delete
+                    </button>
                   </div>
                 )
               }) : <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-10 text-center text-sm text-slate-400">No receipts uploaded yet. AI will extract store, date, and line items automatically.</div>}
