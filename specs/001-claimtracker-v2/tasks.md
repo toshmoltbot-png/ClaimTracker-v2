@@ -460,10 +460,10 @@ Source reference: `/Users/tosh/ClaimTracker/server.js` (v1 backend, 1,703 lines)
 ## Phase 9: Testing & Verification
 
 ### 9.1 Data Compatibility
-- [ ] Load existing v1 Firestore claim in v2
+- [x] Load existing v1 Firestore claim in v2
 - [ ] Verify all 14 tabs render correctly with existing data
-- [ ] Verify no data loss or corruption on save
-- [ ] Verify merge logic handles partial/missing fields
+- [x] Verify no data loss or corruption on save
+- [x] Verify merge logic handles partial/missing fields
 
 ### 9.2 Feature Parity
 - [ ] Walk through every v1 feature in v2
@@ -490,8 +490,8 @@ Source reference: `/Users/tosh/ClaimTracker/server.js` (v1 backend, 1,703 lines)
 - [ ] Concurrent sessions (same claim in two tabs)
 
 ### 9.5 Go-Live
-- [ ] Point Render to `toshmoltbot-png/ClaimTracker-v2`
-- [ ] Verify production deployment
+- [x] Point Render to `toshmoltbot-png/ClaimTracker-v2`
+- [x] Verify production deployment
 - [ ] Test with real claim data
 - [ ] Monitor for errors (Render logs)
 - [ ] Update GSD sync script if needed
