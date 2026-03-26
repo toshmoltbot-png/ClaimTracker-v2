@@ -29,7 +29,7 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
 
   const category = String(draft.category || 'Lodging')
   const isUtility = category === 'Utilities'
-  const isLabor = category === 'Cleanup Labor'
+  const isLabor = category === 'Emergency Mitigation - Cleanup'
   const isDisposal = category === 'Disposal'
   const usesDateRange = isUtility || ['Lodging', 'Food', 'Transportation', 'Storage', 'Laundry', 'Pet Care'].includes(category)
   const totalDays = calcExpenseDays(draft.dateStart, draft.dateEnd)

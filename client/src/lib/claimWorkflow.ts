@@ -136,7 +136,7 @@ export const EXPENSE_CATEGORY_OPTIONS = [
   'Storage',
   'Laundry',
   'Pet Care',
-  'Cleanup Labor',
+  'Emergency Mitigation - Cleanup',
   'Disposal',
   'Other',
 ] as const
@@ -357,7 +357,7 @@ export function createExpenseEntryDraft(category = 'Lodging'): ExpenseEntry {
 
 export function getExpenseEntriesByCategory(expenses: Expenses) {
   const groups = [
-    ...((expenses.laborEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Cleanup Labor' }))),
+    ...((expenses.laborEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Emergency Mitigation - Cleanup' }))),
     ...((expenses.utilityEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Utilities' }))),
     ...((expenses.disposalEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Disposal' }))),
     ...((expenses.livingEntries || []).map((entry) => ({ ...entry, category: entry.category || 'Lodging' }))),
