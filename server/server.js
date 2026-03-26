@@ -1654,7 +1654,13 @@ app.get("/health", (req, res) => {
     res.json({ ok: true, uptime: process.uptime() });
 });
 
-// SPA fallback — serve the Vite-built index.html for all non-API routes
+app.get("/api/ping", (req, res) => {
+    const requestId = crypto.randomUUID();
+    console.log(JSON.stringify({ event: "ping", requestId }));
+    return res.json({ ok: true, requestId });
+});
+
+// SPA fallback — serve the Vite-built index.html for all non-API routes (must be LAST)
 app.get("*", (req, res) => {
     const indexPath = path.join(__dirname, "..", "client", "dist", "index.html");
     res.sendFile(indexPath, (err) => {
@@ -1662,12 +1668,6 @@ app.get("*", (req, res) => {
             res.status(404).send("Not found");
         }
     });
-});
-
-app.get("/api/ping", (req, res) => {
-    const requestId = crypto.randomUUID();
-    console.log(JSON.stringify({ event: "ping", requestId }));
-    return res.json({ ok: true, requestId });
 });
 
 if (process.env.ENABLE_DIAG_ROUTES === "true") {
