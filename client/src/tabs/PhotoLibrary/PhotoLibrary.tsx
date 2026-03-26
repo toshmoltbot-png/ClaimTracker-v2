@@ -73,7 +73,7 @@ export function PhotoLibrary() {
       </section>
 
       <section className="panel p-6">
-        <PhotoUploader label="Upload to photo library" onFilesSelected={(files) => void handleUpload(files)} />
+        <PhotoUploader accept="image/*,application/pdf" label="Upload to photo library" onFilesSelected={(files) => void handleUpload(files)} />
       </section>
 
       <section className="panel px-5 py-5">

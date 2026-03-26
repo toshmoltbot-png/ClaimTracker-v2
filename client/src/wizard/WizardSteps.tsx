@@ -786,7 +786,7 @@ export function WizardSteps() {
       case 7:
         return (
           <div className="space-y-5">
-            <PhotoUploader label="Upload receipts (photos or PDFs)" onFilesSelected={(files) => void uploadReceipts(files)} />
+            <PhotoUploader accept="image/*,application/pdf" label="Upload receipts (photos or PDFs)" onFilesSelected={(files) => void uploadReceipts(files)} />
             {receiptParsing && (
               <div className="flex items-center gap-3 rounded-2xl border border-sky-500/30 bg-sky-950/30 px-4 py-3">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
@@ -854,7 +854,7 @@ export function WizardSteps() {
           <div className="space-y-5">
             <h3 className="text-xl font-semibold text-white">Contractor Reports</h3>
             <p className="text-sm text-slate-300">Upload any remediation or contractor reports (ServPro, Paul Davis, etc). AI will automatically extract the contractor name, findings, and costs.</p>
-            <PhotoUploader label="Upload contractor reports (PDF/image)" onFilesSelected={async (files) => {
+            <PhotoUploader accept="image/*,application/pdf" label="Upload contractor reports (PDF/image)" onFilesSelected={async (files) => {
               for (let i = 0; i < files.length; i++) {
                 const { file } = files[i]
                 setReportParsing(`Parsing report ${i + 1} of ${files.length}: ${file.name}…`)
