@@ -1005,7 +1005,7 @@ export function WizardSteps() {
                 </div>
                 <button
                   className={`rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${current.theme.accentButton}`}
-                  onClick={() => quickAddExpense(current.defaultCategory, `New ${current.title} entry`, 0)}
+                  onClick={() => quickAddExpense(current.defaultCategory, '', 0)}
                   type="button"
                 >
                   + Add Entry
