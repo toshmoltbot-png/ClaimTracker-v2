@@ -185,18 +185,18 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
             </div>
           ) : null}
 
-          <label className="space-y-2 md:col-span-2">
+          <label className={`space-y-2 ${isLabor ? '' : 'md:col-span-2'}`}>
             <span className="text-sm font-medium text-slate-200">Description</span>
-            <textarea className="field min-h-24" onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} value={draft.description || ''} />
+            <input className="field" onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="What work was performed?" value={draft.description || ''} />
           </label>
 
           {isLabor ? (
-            <label className="space-y-2 md:col-span-2">
+            <label className="space-y-2">
               <span className="text-sm font-medium text-slate-200">Justification</span>
-              <textarea
-                className="field min-h-20"
+              <input
+                className="field"
                 onChange={(event) => setDraft((current) => ({ ...current, justification: event.target.value }))}
-                placeholder="Why this labor was necessary (e.g. mitigation of further contamination per IICRC S500)"
+                placeholder="Why was this necessary?"
                 value={draft.justification || ''}
               />
             </label>
