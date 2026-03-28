@@ -1032,12 +1032,12 @@ export function WizardSteps() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-slate-300">Entries</h4>
+                <h4 className="text-sm font-medium text-slate-300">Entries <span className="text-slate-500">({current.entries.length})</span></h4>
                 <p className="text-sm font-semibold text-emerald-400">Subtotal: {formatCurrency(subtotal)}</p>
               </div>
 
               {current.entries.length ? (
-                <div className="space-y-2">
+                <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
                   {current.entries.map((expense) => {
                     const expDate = fmtUSDate(expense.dateStart || expense.date) || ''
                     const hrs = Number(expense.hours || 0)
