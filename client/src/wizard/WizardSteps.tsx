@@ -20,6 +20,7 @@ import {
   removeExpenseEntry,
 } from '@/lib/claimWorkflow'
 import { compressImageToDataUrl, dataUrlToBase64, readFileAsDataUrl } from '@/lib/utils'
+import { fmtUSDate } from '@/lib/dates'
 import { apiClient } from '@/lib/api'
 import { normalizeReceiptPayload, getReceiptItems } from '@/lib/claimWorkflow'
 import { extractPolicyText, parsePolicyFields } from '@/lib/policyParser'
@@ -1037,11 +1038,18 @@ export function WizardSteps() {
 
               {current.entries.length ? (
                 <div className="space-y-2">
-                  {current.entries.map((expense) => (
+                  {current.entries.map((expense) => {
+                    const expDate = fmtUSDate(expense.dateStart || expense.date) || ''
+                    const hrs = Number(expense.hours || 0)
+                    const rate = Number(expense.hourlyRate || 0)
+                    const hrsLabel = hrs && rate ? `${hrs} hrs × $${rate}/hr` : ''
+                    const title = expense.description || expense.vendor || expense.category || 'Expense'
+                    const details = [expDate, hrsLabel, formatCurrency(Number(expense.amount || (expense as Record<string, unknown>).totalAmount || 0))].filter(Boolean).join(' · ')
+                    return (
                     <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
                       <div>
-                        <p className="text-sm font-medium text-white">{expense.description || expense.category || 'Expense'}</p>
-                        <p className="text-xs text-slate-400">{expense.category} · {formatCurrency(Number(expense.amount || (expense as Record<string, unknown>).totalAmount || 0))}</p>
+                        <p className="text-sm font-medium text-white">{title}</p>
+                        <p className="text-xs text-slate-400">{details}</p>
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -1060,7 +1068,7 @@ export function WizardSteps() {
                         </button>
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
