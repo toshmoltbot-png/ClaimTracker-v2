@@ -41,6 +41,11 @@ function ExpenseCard({ entry, onEdit, onDelete }: { entry: ExpenseEntry; onEdit:
           </div>
         </div>
       </div>
+      {entry.justification ? (
+        <p className="mt-3 text-sm text-slate-300">
+          <span className="font-medium text-slate-200">Justification:</span> {entry.justification}
+        </p>
+      ) : null}
       {(entry.lineItems || []).length ? (
         <div className="mt-4 space-y-2">
           {(entry.lineItems || []).map((line) => (

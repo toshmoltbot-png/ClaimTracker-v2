@@ -224,6 +224,7 @@ export interface ExpenseEntry extends DynamicFields {
   estimationDetail?: string | null
   hours?: number
   hourlyRate?: number
+  justification?: string
   receipt?: FileItem | null
 }
 

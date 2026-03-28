@@ -954,17 +954,18 @@ export async function renderExpenses(ctx: PDFSectionContext, onStatus?: (status:
   autoTable(ctx.doc, {
     startY: ctx.y,
     margin: { left: ctx.ML, right: ctx.MR },
-    head: [['Date', 'Category', 'Description', 'Amount']],
+    head: [['Date', 'Category', 'Description', 'Justification', 'Amount']],
     body: ctx.expenseEntries.map((entry) => [
       normalizeClaimDate(entry.dateStart || entry.date),
       String(entry.category || 'Other'),
       String(entry.description || entry.vendor || '—'),
+      String(entry.justification || '—'),
       formatCurrency(Number(entry.amount || 0)),
     ]),
     styles: { fontSize: 8.5, cellPadding: 3 },
     headStyles: { fillColor: LIGHT_BLUE, textColor: NAVY, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [249, 250, 251] },
-    columnStyles: { 0: { cellWidth: 25 }, 3: { halign: 'right', cellWidth: 26 } },
+    columnStyles: { 0: { cellWidth: 22 }, 4: { halign: 'right', cellWidth: 24 } },
   })
   ctx.y = (((ctx.doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY) || ctx.y) + 8
 }
