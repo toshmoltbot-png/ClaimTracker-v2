@@ -17,7 +17,7 @@ interface WeatherSummary {
 async function geocode(address: string) {
   const query = encodeURIComponent(address)
   const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${query}&count=1&language=en&format=json`)
-  if (!response.ok) throw new Error('Unable to geocode address')
+  if (!response.ok) throw new Error('Could not look up your address. Check that it is entered correctly in Step 2.')
   const payload = await response.json() as { results?: Array<{ latitude: number; longitude: number }> }
   return payload.results?.[0] || null
 }
@@ -33,7 +33,7 @@ async function fetchWeather(latitude: number, longitude: number, start: string, 
     temperature_unit: 'fahrenheit',
   })
   const response = await fetch(`https://archive-api.open-meteo.com/v1/archive?${params.toString()}`)
-  if (!response.ok) throw new Error('Unable to fetch weather')
+  if (!response.ok) throw new Error('Could not retrieve weather data. Please try again later.')
   const payload = await response.json() as {
     daily?: {
       temperature_2m_max?: number[]
@@ -67,7 +67,7 @@ export function WeatherCard({ address, dateOfLoss, utilityDateRanges, onWeatherL
       setError('')
       try {
         const coordinates = await geocode(address)
-        if (!coordinates) throw new Error('No weather location found')
+        if (!coordinates) throw new Error('Could not look up weather for your address. Check that your property address is entered correctly in Step 2.')
         const [loss, ...ranges] = await Promise.all([
           fetchWeather(coordinates.latitude, coordinates.longitude, dateOfLoss, dateOfLoss),
           ...utilityDateRanges
@@ -95,7 +95,7 @@ export function WeatherCard({ address, dateOfLoss, utilityDateRanges, onWeatherL
           if (parts.length) onWeatherLoaded(parts.join('. ') + '.')
         }
       } catch (nextError) {
-        if (!cancelled) setError(nextError instanceof Error ? nextError.message : 'Unable to load weather')
+        if (!cancelled) setError(nextError instanceof Error ? nextError.message : 'Could not load weather data.')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -113,8 +113,8 @@ export function WeatherCard({ address, dateOfLoss, utilityDateRanges, onWeatherL
     <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-5 py-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-amber-200">Weather Support</p>
-          <h3 className="mt-2 text-base font-semibold text-white">ALE heating context</h3>
+          <p className="text-xs uppercase tracking-[0.24em] text-amber-200">Weather Data</p>
+          <h3 className="mt-2 text-base font-semibold text-white">Temperature at the time of your loss</h3>
         </div>
         {loading ? <span className="text-xs text-amber-100">Loading…</span> : null}
       </div>
@@ -122,7 +122,7 @@ export function WeatherCard({ address, dateOfLoss, utilityDateRanges, onWeatherL
       {lossWeather ? (
         <p className="mt-3 text-sm text-amber-50">
           Date of loss average temperature: <span className="font-semibold">{lossWeather.avg}°F</span>
-          {lossWeather.avg < 45 ? ' - supports increased heating claims.' : '.'}
+          {lossWeather.avg < 45 ? ' — cold weather supports higher heating costs in your claim.' : '.'}
         </p>
       ) : null}
       {rangeWeather.length ? (
