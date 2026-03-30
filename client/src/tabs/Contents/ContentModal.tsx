@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Modal } from '@/components/shared/Modal'
+import { MoneyInput } from '@/components/shared/MoneyInput'
 import { CONTENT_CATEGORIES, DISPOSITION_OPTIONS, QUANTITY_UNITS, updateContentLineTotal } from '@/lib/claimWorkflow'
 import type { ContentItem, Room } from '@/types/claim'
 
@@ -123,20 +124,18 @@ export function ContentModal({ open, item, rooms, onClose, onSave }: ContentModa
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-200">Unit price</span>
-            <input
-              className="field"
+            <MoneyInput
               min="0"
               onChange={(event) =>
-                setDraft((current) => updateContentLineTotal({ ...current, unitPrice: Number(event.target.value || 0), replacementCost: Number(event.target.value || 0) }))
+                setDraft((current) => updateContentLineTotal({ ...current, unitPrice: Number((event.target as HTMLInputElement).value || 0), replacementCost: Number((event.target as HTMLInputElement).value || 0) }))
               }
               step="0.01"
-              type="number"
               value={draft.unitPrice || 0}
             />
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-200">Total</span>
-            <input className="field" readOnly value={Number(draft.total || 0).toFixed(2)} />
+            <MoneyInput readOnly value={Number(draft.total || 0).toFixed(2)} />
           </label>
           <label className="space-y-2 md:col-span-2">
             <span className="text-sm font-medium text-slate-200">Replacement link</span>

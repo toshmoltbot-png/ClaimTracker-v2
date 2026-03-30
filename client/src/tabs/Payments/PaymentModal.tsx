@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '@/components/shared/Modal'
+import { MoneyInput } from '@/components/shared/MoneyInput'
 import { createPaymentDraft, normalizePaymentDraft, PAYMENT_COVERAGE_TYPE_OPTIONS, PAYMENT_TYPE_OPTIONS } from '@/lib/claimWorkflow'
 import type { Payment } from '@/types/claim'
 
@@ -44,7 +45,7 @@ export function PaymentModal({ open, payment, onClose, onSave }: PaymentModalPro
         </label>
         <label className="space-y-2">
           <span className="text-sm font-medium text-slate-200">Amount</span>
-          <input className="field" min="0" onChange={(event) => setDraft((current) => ({ ...current, amount: Number(event.target.value || 0) }))} step="0.01" type="number" value={draft.amount || 0} />
+          <MoneyInput min="0" onChange={(event) => setDraft((current) => ({ ...current, amount: Number((event.target as HTMLInputElement).value || 0) }))} step="0.01" value={draft.amount || 0} />
         </label>
         <label className="space-y-2">
           <span className="text-sm font-medium text-slate-200">Type</span>
@@ -71,7 +72,7 @@ export function PaymentModal({ open, payment, onClose, onSave }: PaymentModalPro
         </label>
         <label className="space-y-2">
           <span className="text-sm font-medium text-slate-200">Depreciation holdback</span>
-          <input className="field" type="number" min="0" step="0.01" onChange={(event) => setDraft((current) => ({ ...current, depreciation: Number(event.target.value || 0) }))} value={draft.depreciation || ''} />
+          <MoneyInput min="0" step="0.01" onChange={(event) => setDraft((current) => ({ ...current, depreciation: Number((event.target as HTMLInputElement).value || 0) }))} value={draft.depreciation || ''} />
         </label>
         <label className="space-y-2 md:col-span-2">
           <span className="text-sm font-medium text-slate-200">Notes</span>

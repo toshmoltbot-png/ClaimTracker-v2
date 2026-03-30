@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '@/components/shared/Modal'
+import { MoneyInput } from '@/components/shared/MoneyInput'
 import {
   COMMUNICATION_PARTY_OPTIONS,
   COMMUNICATION_TYPE_OPTIONS,
@@ -89,7 +90,7 @@ export function CommunicationModal({ open, communication, onClose, onSave }: Com
           <>
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-200">Promised amount</span>
-              <input className="field" type="number" min="0" step="0.01" onChange={(event) => setDraft((current) => ({ ...current, promisedAmount: Number(event.target.value) || 0 }))} value={draft.promisedAmount || ''} />
+              <MoneyInput min="0" step="0.01" onChange={(event) => setDraft((current) => ({ ...current, promisedAmount: Number((event.target as HTMLInputElement).value) || 0 }))} value={draft.promisedAmount || ''} />
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-200">Promised by date</span>

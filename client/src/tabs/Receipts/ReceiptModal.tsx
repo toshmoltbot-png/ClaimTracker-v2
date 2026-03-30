@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '@/components/shared/Modal'
+import { MoneyInput } from '@/components/shared/MoneyInput'
 import { getReceiptItems, normalizeReceiptItem } from '@/lib/claimWorkflow'
 import type { Receipt } from '@/types/claim'
 
@@ -54,12 +55,10 @@ export function ReceiptModal({ open, receipt, onClose, onSave }: ReceiptModalPro
         </div>
         <label className="grid gap-2">
           <span className="text-sm text-slate-300">Total</span>
-          <input
-            className="field"
+          <MoneyInput
             min="0"
-            onChange={(event) => setDraft((current) => ({ ...current, receiptTotal: Number(event.target.value) || 0 }))}
+            onChange={(event) => setDraft((current) => ({ ...current, receiptTotal: Number((event.target as HTMLInputElement).value) || 0 }))}
             step="0.01"
-            type="number"
             value={draft.receiptTotal || 0}
           />
         </label>
@@ -89,31 +88,27 @@ export function ReceiptModal({ open, receipt, onClose, onSave }: ReceiptModalPro
                 type="number"
                 value={item.quantity || 1}
               />
-              <input
-                className="field"
+              <MoneyInput
                 min="0"
                 onChange={(event) =>
                   setDraft((current) => ({
                     ...current,
-                    items: (current.items || []).map((entry, entryIndex) => (entryIndex === index ? normalizeReceiptItem({ ...entry, unitPrice: Number(event.target.value) || 0 }) : entry)),
+                    items: (current.items || []).map((entry, entryIndex) => (entryIndex === index ? normalizeReceiptItem({ ...entry, unitPrice: Number((event.target as HTMLInputElement).value) || 0 }) : entry)),
                   }))
                 }
                 step="0.01"
-                type="number"
                 value={item.unitPrice || 0}
               />
               <div className="flex gap-2">
-                <input
-                  className="field"
+                <MoneyInput
                   min="0"
                   onChange={(event) =>
                     setDraft((current) => ({
                       ...current,
-                      items: (current.items || []).map((entry, entryIndex) => (entryIndex === index ? normalizeReceiptItem({ ...entry, totalPrice: Number(event.target.value) || 0 }) : entry)),
+                      items: (current.items || []).map((entry, entryIndex) => (entryIndex === index ? normalizeReceiptItem({ ...entry, totalPrice: Number((event.target as HTMLInputElement).value) || 0 }) : entry)),
                     }))
                   }
                   step="0.01"
-                  type="number"
                   value={item.totalPrice || 0}
                 />
                 <button

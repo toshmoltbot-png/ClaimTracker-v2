@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Modal } from '@/components/shared/Modal'
+import { MoneyInput } from '@/components/shared/MoneyInput'
 import {
   calcExpenseDays,
   createExpenseEntryDraft,
@@ -159,13 +160,11 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
                 </select>
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-200">Daily increase ($)</span>
-                <input
-                  className="field"
+                <span className="text-sm font-medium text-slate-200">Daily increase</span>
+                <MoneyInput
                   min="0"
-                  onChange={(event) => { setDraft((current) => updateExpenseLineTotal({ ...current, dailyCostIncrease: Number(event.target.value || 0) })) }}
+                  onChange={(event) => { setDraft((current) => updateExpenseLineTotal({ ...current, dailyCostIncrease: Number((event.target as HTMLInputElement).value || 0) })) }}
                   step="0.01"
-                  type="number"
                   value={draft.dailyCostIncrease || 0}
                 />
                 <button className="mt-1 text-xs text-sky-400 hover:text-sky-300" onClick={() => setFuelMode((v) => !v)} type="button">
@@ -197,10 +196,7 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
                     </label>
                     <label className="space-y-1">
                       <span className="text-xs text-slate-300">Price per {FUEL_DEFAULTS[fuelType]?.unit || 'unit'}</span>
-                      <div className="relative">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
-                        <input className="field pl-7" min="0" onChange={(event) => setFuelPrice(Number(event.target.value || 0))} step="0.01" type="number" value={fuelPrice || ''} />
-                      </div>
+                      <MoneyInput min="0" onChange={(event) => setFuelPrice(Number((event.target as HTMLInputElement).value || 0))} step="0.01" value={fuelPrice || ''} />
                     </label>
                   </div>
                   <p className="text-xs text-slate-400">Daily estimate: <span className="font-semibold text-sky-200">${(fuelUsage * fuelPrice).toFixed(2)}/day</span> — auto-applied to daily increase above</p>
@@ -225,12 +221,10 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
               </label>
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-200">Hourly rate</span>
-                <input
-                  className="field"
+                <MoneyInput
                   min="0"
-                  onChange={(event) => setDraft((current) => updateExpenseLineTotal({ ...current, hourlyRate: Number(event.target.value || 0) }))}
+                  onChange={(event) => setDraft((current) => updateExpenseLineTotal({ ...current, hourlyRate: Number((event.target as HTMLInputElement).value || 0) }))}
                   step="0.01"
-                  type="number"
                   value={draft.hourlyRate || 0}
                 />
               </label>
@@ -240,19 +234,17 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
           {!isUtility && !isLabor ? (
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-200">{isDisposal ? 'Amount' : 'Daily cost / fallback amount'}</span>
-              <input
-                className="field"
+              <MoneyInput
                 min="0"
                 onChange={(event) =>
                   setDraft((current) =>
                     updateExpenseLineTotal({
                       ...current,
-                      amount: Number(event.target.value || 0),
-                      dailyCost: Number(event.target.value || 0),
+                      amount: Number((event.target as HTMLInputElement).value || 0),
+                      dailyCost: Number((event.target as HTMLInputElement).value || 0),
                     }))
                 }
                 step="0.01"
-                type="number"
                 value={draft.amount || draft.dailyCost || 0}
               />
             </label>
@@ -317,20 +309,18 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
                   placeholder="Description"
                   value={line.description || ''}
                 />
-                <input
-                  className="field"
+                <MoneyInput
                   min="0"
                   onChange={(event) =>
                     setDraft((current) =>
                       updateExpenseLineTotal({
                         ...current,
                         lineItems: (current.lineItems || []).map((entry, entryIndex) => (
-                          entryIndex === index ? { ...entry, amount: Number(event.target.value || 0) } : entry
+                          entryIndex === index ? { ...entry, amount: Number((event.target as HTMLInputElement).value || 0) } : entry
                         )),
                       }))
                   }
                   step="0.01"
-                  type="number"
                   value={line.amount || 0}
                 />
                 <button

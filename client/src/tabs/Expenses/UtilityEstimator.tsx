@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { MoneyInput } from '@/components/shared/MoneyInput'
 import { calcExpenseDays, formatCurrency } from '@/lib/claimWorkflow'
 
 const FUEL_DEFAULTS: Record<string, { unit: string; price: number }> = {
@@ -48,7 +49,7 @@ export function UtilityEstimator() {
         {mode === 'bill' ? (
           <label className="space-y-2 md:col-span-2">
             <span className="text-sm text-slate-300">Daily utility increase</span>
-            <input className="field" min="0" onChange={(event) => setDailyIncrease(Number(event.target.value || 0))} step="0.01" type="number" value={dailyIncrease} />
+            <MoneyInput min="0" onChange={(event) => setDailyIncrease(Number((event.target as HTMLInputElement).value || 0))} step="0.01" value={dailyIncrease} />
           </label>
         ) : (
           <>
@@ -76,7 +77,7 @@ export function UtilityEstimator() {
             </label>
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm text-slate-300">Price per {defaultUnit}</span>
-              <input className="field" min="0" onChange={(event) => setFuelPrice(Number(event.target.value || 0))} step="0.01" type="number" value={fuelPrice} />
+              <MoneyInput min="0" onChange={(event) => setFuelPrice(Number((event.target as HTMLInputElement).value || 0))} step="0.01" value={fuelPrice} />
             </label>
           </>
         )}
