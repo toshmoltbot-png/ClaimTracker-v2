@@ -191,7 +191,7 @@ export function WizardSteps() {
   void progress; void wizardTip
   const floorPlan = ensureFloorPlanSettings(data.floorPlan)
   const utilityRanges = useMemo(
-    () => (data.expenses.utilityEntries || []).map((entry) => ({ start: entry.dateStart, end: entry.dateEnd, label: entry.description || entry.utilityType || 'Utility span' })),
+    () => (data.expenses.utilityEntries || []).map((entry) => ({ start: entry.dateStart, end: entry.dateEnd, label: entry.utilityType || 'Utility' })),
     [data.expenses.utilityEntries],
   )
 
@@ -1340,7 +1340,8 @@ export function WizardSteps() {
                       const hrs = Number(expense.hours || 0)
                       const rate = Number(expense.hourlyRate || 0)
                       const hrsLabel = hrs && rate ? `${hrs} hrs × $${rate}/hr` : ''
-                      const title = expense.description || expense.vendor || expense.category || 'Expense'
+                      const rawTitle = expense.description || expense.vendor || expense.category || 'Expense'
+                      const title = rawTitle.length > 80 ? rawTitle.slice(0, 77) + '...' : rawTitle
                       const details = [expDate, hrsLabel, formatCurrency(Number(expense.amount || (expense as Record<string, unknown>).totalAmount || 0))].filter(Boolean).join(' · ')
                       return (
                       <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
