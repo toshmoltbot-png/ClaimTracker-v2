@@ -90,7 +90,7 @@ export function FloorPlan() {
               <label className="flex items-center justify-between rounded-2xl border border-[color:var(--border)] bg-slate-950/45 px-4 py-3" key={room.id}>
                 <div>
                   <p className="text-sm font-semibold text-white">{room.name || 'Room'}</p>
-                  <p className="mt-1 text-xs text-slate-400">{room.dimensions || `${room.length || 0} x ${room.width || 0}`} ft</p>
+                  <p className="mt-1 text-xs text-slate-400">{room.dimensions || `${room.length || 0} x ${room.width || 0}`}</p>
                 </div>
                 <input
                   checked={room.floorPlanVisible !== false}

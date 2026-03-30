@@ -433,6 +433,15 @@ export function calcRoomSqft(length: number | string | null | undefined, width: 
   return sqft > 0 ? Number(sqft.toFixed(2)) : 0
 }
 
+function formatFeetInches(decimalFeet: number): string {
+  if (!decimalFeet) return ''
+  const ft = Math.floor(decimalFeet)
+  const inches = Math.round((decimalFeet - ft) * 12)
+  if (inches === 0) return `${ft} ft`
+  if (inches === 12) return `${ft + 1} ft`
+  return `${ft} ft ${inches} in`
+}
+
 export function updateRoomDimensions(room: Room): Room {
   const length = parseNumber(room.length)
   const width = parseNumber(room.width)
@@ -442,7 +451,7 @@ export function updateRoomDimensions(room: Room): Room {
     length: length || '',
     width: width || '',
     sqft: sqft || '',
-    dimensions: length && width ? `${length} x ${width}` : '',
+    dimensions: length && width ? `${formatFeetInches(length)} x ${formatFeetInches(width)}` : '',
   }
 }
 
