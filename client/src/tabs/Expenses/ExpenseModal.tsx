@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Modal } from '@/components/shared/Modal'
 import {
   calcExpenseDays,
@@ -40,16 +40,18 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
     'Wood Pellet': { unit: 'lbs', price: 0.15 },
   }
 
-  const applyFuelEstimate = useCallback(() => {
+  // Auto-sync fuel estimate into dailyCostIncrease whenever inputs change
+  useEffect(() => {
+    if (!fuelMode) return
     const daily = fuelUsage * fuelPrice
     setDraft((current) => updateExpenseLineTotal({
       ...current,
       dailyCostIncrease: Number(daily.toFixed(2)),
       isEstimated: true,
       estimationMethod: 'fuelEstimator',
-      estimationDetail: `${fuelUsage} ${FUEL_DEFAULTS[fuelType].unit}/day × $${fuelPrice.toFixed(2)}/${FUEL_DEFAULTS[fuelType].unit} (${fuelType})`,
+      estimationDetail: `${fuelUsage} ${FUEL_DEFAULTS[fuelType]?.unit || 'units'}/day × $${fuelPrice.toFixed(2)}/${FUEL_DEFAULTS[fuelType]?.unit || 'unit'} (${fuelType})`,
     }))
-  }, [fuelUsage, fuelPrice, fuelType])
+  }, [fuelMode, fuelUsage, fuelPrice, fuelType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const category = String(draft.category || 'Lodging')
   const isUtility = category === 'Utilities'
@@ -194,14 +196,14 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
                       <input className="field" min="0" onChange={(event) => setFuelUsage(Number(event.target.value || 0))} step="0.01" type="number" value={fuelUsage || ''} />
                     </label>
                     <label className="space-y-1">
-                      <span className="text-xs text-slate-300">Price per {FUEL_DEFAULTS[fuelType]?.unit || 'unit'} ($)</span>
-                      <input className="field" min="0" onChange={(event) => setFuelPrice(Number(event.target.value || 0))} step="0.01" type="number" value={fuelPrice || ''} />
+                      <span className="text-xs text-slate-300">Price per {FUEL_DEFAULTS[fuelType]?.unit || 'unit'}</span>
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
+                        <input className="field pl-7" min="0" onChange={(event) => setFuelPrice(Number(event.target.value || 0))} step="0.01" type="number" value={fuelPrice || ''} />
+                      </div>
                     </label>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-400">Daily estimate: <span className="font-semibold text-sky-200">${(fuelUsage * fuelPrice).toFixed(2)}</span></p>
-                    <button className="button-primary text-xs px-3 py-1.5" onClick={applyFuelEstimate} type="button">Apply to daily cost</button>
-                  </div>
+                  <p className="text-xs text-slate-400">Daily estimate: <span className="font-semibold text-sky-200">${(fuelUsage * fuelPrice).toFixed(2)}/day</span> — auto-applied to daily increase above</p>
                   <p className="text-[11px] text-slate-500">⚠️ Prices are national averages. Adjust to match your local invoice or utility bill.</p>
                 </div>
               ) : null}
