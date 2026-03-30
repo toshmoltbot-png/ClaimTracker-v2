@@ -15,11 +15,35 @@ interface WeatherSummary {
 }
 
 async function geocode(address: string) {
-  const query = encodeURIComponent(address)
-  const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${query}&count=1&language=en&format=json`)
-  if (!response.ok) throw new Error('Could not look up your address. Check that it is entered correctly in Step 2.')
-  const payload = await response.json() as { results?: Array<{ latitude: number; longitude: number }> }
-  return payload.results?.[0] || null
+  // Open-Meteo geocoder only handles city/place names, not full street addresses.
+  // Try progressively simpler queries: full → city/state/zip → city/state → zip
+  const attempts = buildGeocodeCandidates(address)
+  for (const query of attempts) {
+    const encoded = encodeURIComponent(query)
+    const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encoded}&count=1&language=en&format=json`)
+    if (!response.ok) continue
+    const payload = await response.json() as { results?: Array<{ latitude: number; longitude: number }> }
+    if (payload.results?.[0]) return payload.results[0]
+  }
+  return null
+}
+
+function buildGeocodeCandidates(address: string): string[] {
+  const candidates: string[] = []
+  // Try full address first (unlikely to work but costs nothing)
+  candidates.push(address)
+  // Extract city, state, zip from common formats like "287 Ashby Road, Ashburnham, MA 01430"
+  const parts = address.split(',').map((s) => s.trim())
+  if (parts.length >= 2) {
+    // Skip first part (street), use rest (city, state zip)
+    candidates.push(parts.slice(1).join(', '))
+    // Just city name
+    candidates.push(parts[1].trim())
+  }
+  // Try zip code if present
+  const zipMatch = address.match(/\b(\d{5})\b/)
+  if (zipMatch) candidates.push(zipMatch[1])
+  return candidates.filter(Boolean)
 }
 
 async function fetchWeather(latitude: number, longitude: number, start: string, end: string): Promise<WeatherSummary | null> {
