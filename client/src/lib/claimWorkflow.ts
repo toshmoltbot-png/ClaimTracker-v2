@@ -305,7 +305,7 @@ export function updateExpenseLineTotal(entry: ExpenseEntry) {
       }))
     : []
   const lineItemsTotal = nextLineItems.reduce((sum, line) => sum + parseMoneyValue(line.amount), 0)
-  const totalDays = entry.totalDays || calcExpenseDays(entry.dateStart, entry.dateEnd)
+  const totalDays = calcExpenseDays(entry.dateStart, entry.dateEnd) || entry.totalDays || 0
   let amount = parseMoneyValue(entry.amount)
 
   if (category === 'utilities') {
