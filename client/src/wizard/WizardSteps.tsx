@@ -107,7 +107,7 @@ export function WizardSteps() {
   const [aleSkipped, setAleSkipped] = useState<Set<string>>(new Set())
 
   const handlePolicyUpload = async (file: File) => {
-    setPolicyUploadStatus(`📄 ${file.name} — processing...`)
+    setPolicyUploadStatus(`Processing ${file.name}...`)
     try {
       const text = await extractPolicyText(file)
       const { dashboard } = parsePolicyFields(text)
@@ -137,12 +137,12 @@ export function WizardSteps() {
 
       setPolicyUploadStatus(
         filledCount > 0
-          ? `✅ ${file.name} — ${filledCount} field${filledCount === 1 ? '' : 's'} filled!`
-          : `⚠️ ${file.name} — couldn't extract fields. Fill them in manually below.`
+          ? `Done! ${file.name} — ${filledCount} field${filledCount === 1 ? '' : 's'} filled!`
+          : `${file.name} — could not extract fields. Fill them in manually below.`
       )
     } catch (err) {
       console.error('Policy upload failed', err)
-      setPolicyUploadStatus(`⚠️ Could not process ${file.name}. Try another file.`)
+      setPolicyUploadStatus(`Could not process ${file.name}. Try another file.`)
     }
   }
 
@@ -172,6 +172,17 @@ export function WizardSteps() {
   useEffect(() => {
     if (wizard.step === 10) { setExpenseSubStep(1); setAleCardIndex(0) }
   }, [wizard.step])
+
+  // Auto-import photos when entering step 11
+  useEffect(() => {
+    if (wizard.step === 11) {
+      updateData((current) => ({
+        ...current,
+        aiPhotos: current.aiPhotos.length ? current.aiPhotos : autoImportPhotosToAIBuilder(current),
+        aiNeedsUpdate: true,
+      }))
+    }
+  }, [wizard.step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const contentRef = { current: null as HTMLDivElement | null }
   const progress = Math.round((wizard.step / steps.length) * 100)
@@ -324,7 +335,7 @@ export function WizardSteps() {
           inventoryItemIds: [],
         }
         updateData((current) => syncClaimReceipts({ ...current, receipts: [receipt, ...current.receipts] }))
-        pushToast(`⚠️ Could not parse ${file.name} — saved without extraction.`, 'error')
+        pushToast(`Could not parse ${file.name} — saved without extraction.`, 'error')
       }
     }
     setReceiptParsing('')
@@ -376,8 +387,8 @@ export function WizardSteps() {
         return (
           <div className="grid gap-5 lg:grid-cols-[1.2fr,0.8fr]">
             <div className="space-y-4">
-              <h3 className="text-2xl font-semibold text-white">Start the claim workspace</h3>
-              <p className="text-sm leading-7 text-slate-300">Pick the loss type first. It informs contamination handling, AI context, and report language.</p>
+              <h3 className="text-2xl font-semibold text-white">What happened to your home?</h3>
+              <p className="text-sm leading-7 text-slate-300">Select the type of damage. This helps us ask the right questions.</p>
             </div>
             <div className="space-y-3">
               {CLAIM_TYPE_OPTIONS.map((option) => (
@@ -412,7 +423,7 @@ export function WizardSteps() {
                 if (file) await handlePolicyUpload(file)
               }}
             >
-              <p className="text-sm font-medium text-slate-200">📄 Upload your policy declarations page</p>
+              <p className="text-sm font-medium text-slate-200">Upload your policy declarations page</p>
               <p className="mt-1 text-xs text-slate-400">Drag & drop or click to browse · PDF, TXT, or image</p>
               <input
                 accept=".pdf,.txt,.png,.jpg,.jpeg"
@@ -425,7 +436,7 @@ export function WizardSteps() {
                 type="file"
               />
               {policyUploadStatus && (
-                <p className={`mt-3 text-sm ${policyUploadStatus.startsWith('✅') ? 'text-emerald-400' : policyUploadStatus.startsWith('⚠') ? 'text-amber-400' : 'text-slate-400'}`}>
+                <p className={`mt-3 text-sm ${policyUploadStatus.startsWith('Done!') ? 'text-emerald-400' : policyUploadStatus.startsWith('Could not') ? 'text-amber-400' : 'text-slate-400'}`}>
                   {policyUploadStatus}
                 </p>
               )}
@@ -552,7 +563,7 @@ export function WizardSteps() {
                       <button className="button-secondary text-sm" onClick={() => hasNextRoom ? setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '') : nextStep()} type="button">→</button>
                     </div>
                     <span className="rounded-full bg-sky-400/15 px-3 py-1 text-sm font-semibold text-sky-200">
-                      {roomIndex + 1} of {data.rooms.length} · {(currentRoom?.photos || []).length} 📷
+                      {roomIndex + 1} of {data.rooms.length} · {(currentRoom?.photos || []).length} photos
                       {uploadingCount > 0 && <span className="ml-1 text-amber-300">({uploadingCount} uploading…)</span>}
                     </span>
                   </div>
@@ -606,7 +617,7 @@ export function WizardSteps() {
                       onClick={() => setPhotoRoomId(room.id)}
                       type="button"
                     >
-                      {room.name || `Room ${i + 1}`} · {(room.photos || []).length} 📷
+                      {room.name || `Room ${i + 1}`} · {(room.photos || []).length} photos
                     </button>
                   ))}
                 </div>
@@ -617,7 +628,7 @@ export function WizardSteps() {
                     Continue to next room →
                   </button>
                 ) : (
-                  <p className="text-sm text-emerald-400">✅ All rooms covered. Click Next to continue.</p>
+                  <p className="text-sm text-emerald-400">All rooms covered. Click Next to continue.</p>
                 )}
               </>
             ) : (
@@ -719,14 +730,14 @@ export function WizardSteps() {
 
             {roomsWithoutPhotos.length > 0 && (
               <div className="rounded-2xl border border-amber-400/30 bg-amber-400/5 px-5 py-4">
-                <p className="text-sm font-medium text-amber-300">⚠ {roomsWithoutPhotos.length} room{roomsWithoutPhotos.length === 1 ? '' : 's'} with no photos: {roomsWithoutPhotos.map((r) => r.name || 'Untitled').join(', ')}</p>
+                <p className="text-sm font-medium text-amber-300">{roomsWithoutPhotos.length} room{roomsWithoutPhotos.length === 1 ? '' : 's'} with no photos: {roomsWithoutPhotos.map((r) => r.name || 'Untitled').join(', ')}</p>
                 <button className="mt-2 text-xs font-medium text-amber-300 hover:text-amber-100" onClick={() => { setPhotoRoomId(roomsWithoutPhotos[0]?.id || ''); previousStep() }} type="button">← Go back and add photos</button>
               </div>
             )}
 
             {duplicateCount > 0 && (
               <div className="rounded-2xl border border-rose-400/30 bg-rose-400/5 px-5 py-4">
-                <p className="text-sm font-medium text-rose-300">⚠ {duplicateCount} possible duplicate{duplicateCount === 1 ? '' : 's'} detected ({duplicateKeys.size} photos)</p>
+                <p className="text-sm font-medium text-rose-300">{duplicateCount} possible duplicate{duplicateCount === 1 ? '' : 's'} detected ({duplicateKeys.size} photos)</p>
                 <p className="mt-1 text-xs text-slate-400">Photos with the same filename appear more than once. Look for the red "DUPE" badge below — delete the extra or move it if it's in the wrong room.</p>
               </div>
             )}
@@ -907,12 +918,12 @@ export function WizardSteps() {
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-white">Floor plan sketch</h3>
-                <p className="mt-2 text-sm text-slate-300">Snap is {floorPlan.snapEnabled === false ? 'off' : 'on'}. You can keep refining this later from the Floor Plan tab.</p>
+                <h3 className="text-lg font-semibold text-white">Sketch your floor layout</h3>
+                <p className="mt-2 text-sm text-slate-300">Drag rooms into position. Don't worry about being exact — you can adjust this later.</p>
               </div>
               <label className="flex items-center gap-2 text-sm text-slate-300">
                 <input checked={floorPlan.snapEnabled !== false} onChange={(event) => updateData((current) => ({ ...current, floorPlan: { ...ensureFloorPlanSettings(current.floorPlan), snapEnabled: event.target.checked } }))} type="checkbox" />
-                Snap to grid
+                Align rooms to grid
               </label>
             </div>
             <FloorPlanCanvas />
@@ -952,7 +963,7 @@ export function WizardSteps() {
                         onClick={() => setEditingReceipt(receipt)}
                         type="button"
                       >
-                        ✏️ Edit
+                        Edit
                       </button>
                       <button
                         className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
@@ -987,9 +998,9 @@ export function WizardSteps() {
       case 9:
         return (
           <div className="space-y-5">
-            <h3 className="text-xl font-semibold text-white">Contractor Reports</h3>
-            <p className="text-sm text-slate-300">Upload any remediation or contractor reports (ServPro, Paul Davis, etc). AI will automatically extract the contractor name, findings, and costs.</p>
-            <PhotoUploader accept="image/*,application/pdf" label="Upload contractor reports (PDF/image)" onFilesSelected={async (files) => {
+            <h3 className="text-xl font-semibold text-white">Contractor or Repair Estimates</h3>
+            <p className="text-sm text-slate-300">If a repair company gave you a written estimate or report, upload it here. We'll pull out the important details automatically.</p>
+            <PhotoUploader accept="image/*,application/pdf" label="Upload estimates or reports" onFilesSelected={async (files) => {
               for (let i = 0; i < files.length; i++) {
                 const { file } = files[i]
                 setReportParsing(`Parsing report ${i + 1} of ${files.length}: ${file.name}…`)
@@ -1122,8 +1133,7 @@ export function WizardSteps() {
             <div className={`rounded-3xl border px-5 py-5 ${current.theme.wrapper}`}>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className={`text-xs font-medium uppercase tracking-[0.2em] ${current.theme.accentText}`}>Step 10 · {expenseSubStep} of 5</p>
-                  <h3 className="mt-2 text-xl font-semibold text-white">{current.title}</h3>
+                  <h3 className="text-xl font-semibold text-white">{current.title}</h3>
                   <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-200">{current.helper}</p>
                 </div>
                 {!(current as { isInterview?: boolean }).isInterview && (
@@ -1422,7 +1432,7 @@ export function WizardSteps() {
               <h3 className="text-lg font-semibold text-white">AI Analysis</h3>
               <p className="mt-2 text-sm leading-7 text-slate-300">
                 {totalAI === 0
-                  ? 'No photos in the AI queue. Import your room and item photos, then run analysis.'
+                  ? "We'll now scan your photos and identify your damaged items. This may take a few minutes."
                   : allDone
                     ? `Analysis complete. ${completedAI} photo${completedAI === 1 ? '' : 's'} processed, ${itemsFound} item${itemsFound === 1 ? '' : 's'} identified.`
                     : analyzingAI > 0
@@ -1445,7 +1455,7 @@ export function WizardSteps() {
                   />
                 </div>
                 {failedAI > 0 && (
-                  <p className="text-xs text-rose-400">{failedAI} photo{failedAI === 1 ? '' : 's'} failed — you can retry from the AI Builder tab.</p>
+                  <p className="text-xs text-rose-400">{failedAI} photo{failedAI === 1 ? '' : 's'} failed — You can retry failed photos after completing the wizard.</p>
                 )}
               </div>
             )}
@@ -1454,11 +1464,11 @@ export function WizardSteps() {
             <div className="grid gap-3 sm:grid-cols-4">
               <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3 text-center">
                 <p className="text-2xl font-semibold text-white">{totalAI}</p>
-                <p className="mt-1 text-xs text-slate-400">In queue</p>
+                <p className="mt-1 text-xs text-slate-400">Total photos</p>
               </div>
               <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3 text-center">
                 <p className="text-2xl font-semibold text-emerald-400">{completedAI}</p>
-                <p className="mt-1 text-xs text-slate-400">Analyzed</p>
+                <p className="mt-1 text-xs text-slate-400">Scanned</p>
               </div>
               <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3 text-center">
                 <p className="text-2xl font-semibold text-white">{itemsFound}</p>
@@ -1472,23 +1482,16 @@ export function WizardSteps() {
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-3">
-              {totalAI === 0 && (
+              {!allDone && analyzingAI === 0 && (
                 <button className="button-primary" onClick={() => {
                   updateData((current) => ({
                     ...current,
                     aiPhotos: current.aiPhotos.length ? current.aiPhotos : autoImportPhotosToAIBuilder(current),
                     aiNeedsUpdate: true,
                   }))
-                  pushToast('Photos imported to AI queue.', 'success')
-                }} type="button">
-                  Import Photos to AI Queue
-                </button>
-              )}
-              {totalAI > 0 && !allDone && analyzingAI === 0 && (
-                <button className="button-primary" onClick={() => {
                   launchAI()
                 }} type="button">
-                  Run AI Analysis
+                  Start Analyzing Photos
                 </button>
               )}
               {allDone && (
@@ -1496,13 +1499,6 @@ export function WizardSteps() {
                   Continue to Review
                 </button>
               )}
-              <button className="button-secondary" onClick={() => {
-                setActiveTab('ai-builder')
-                window.location.hash = '#ai-builder'
-                setWizardOpen(false)
-              }} type="button">
-                Open Full AI Builder
-              </button>
             </div>
           </div>
         )
@@ -1512,7 +1508,7 @@ export function WizardSteps() {
         const totalValue = (data.contents || []).reduce((sum, i) => sum + Number(i.replacementCost || 0), 0)
         return (
           <div className="space-y-5">
-            <h3 className="text-xl font-semibold text-white">Review your contents inventory</h3>
+            <h3 className="text-xl font-semibold text-white">Review your damaged items</h3>
             {itemCount > 0 ? (
               <>
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -1526,15 +1522,15 @@ export function WizardSteps() {
                   </div>
                   <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4 text-center">
                     <p className="text-2xl font-semibold text-white">{(data.contents || []).filter((i) => i.enrichment?.revised || i.enriched).length}</p>
-                    <p className="mt-1 text-xs text-slate-400">Enriched</p>
+                    <p className="mt-1 text-xs text-slate-400">Price-verified</p>
                   </div>
                 </div>
-                <button className="button-secondary" onClick={() => { closeWizard(); setActiveTab('contents') }} type="button">Review in Contents tab</button>
+                <button className="button-primary" onClick={nextStep} type="button">Review and Edit Items</button>
               </>
             ) : (
               <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
-                <p className="text-sm text-slate-400">No items yet. Use AI Builder to scan photos, or add items manually in the Contents tab.</p>
-                <button className="button-primary mt-4" onClick={() => { closeWizard(); setActiveTab('ai-builder') }} type="button">Open AI Builder</button>
+                <p className="text-sm text-slate-400">No items found yet. Go back to the previous step to scan your photos, or continue and add items manually later.</p>
+                <button className="button-primary mt-4" onClick={previousStep} type="button">Go Back to Photo Scan</button>
               </div>
             )}
           </div>
@@ -1544,9 +1540,9 @@ export function WizardSteps() {
         return (
           <div className="space-y-5">
             <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/10 px-5 py-5">
-              <h3 className="text-xl font-semibold text-white">Workspace ready</h3>
+              <h3 className="text-xl font-semibold text-white">Your claim is ready</h3>
               <p className="mt-2 text-sm leading-7 text-slate-200">
-                The core claim scaffolding is in place. Review the checklist below, then continue building your claim.
+                We've captured everything we need to build your claim report. Here's what we have so far.
               </p>
             </div>
             <div className="space-y-2">
@@ -1556,22 +1552,22 @@ export function WizardSteps() {
                 { label: 'Rooms added', done: (data.rooms || []).length > 0 },
                 { label: 'Room photos uploaded', done: (data.rooms || []).some((r) => (r.photos || []).length > 0) },
                 { label: 'Item photos uploaded', done: (data.aiPhotos || []).some((p) => (p as Record<string, unknown>).source === 'wizard-item-upload') },
-                { label: 'AI analysis started', done: (data.aiPhotos || []).some((p) => (p as Record<string, unknown>).aiStatus === 'processed') },
-                { label: 'Contents inventory started', done: (data.contents || []).length > 0 },
-                { label: 'Expenses tracked', done: getExpensesTotal(data.expenses) > 0 },
+                { label: 'Photos scanned', done: (data.aiPhotos || []).some((p) => (p as Record<string, unknown>).aiStatus === 'processed') },
+                { label: 'Damaged items listed', done: (data.contents || []).length > 0 },
+                { label: 'Out-of-pocket costs added', done: getExpensesTotal(data.expenses) > 0 },
               ].map((item) => (
                 <div className="flex items-center gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/30 px-4 py-3" key={item.label}>
-                  <span className={item.done ? 'text-emerald-400' : 'text-slate-600'}>{item.done ? '✅' : '○'}</span>
+                  <span className={item.done ? 'text-emerald-400' : 'text-slate-600'}>{item.done ? '✓' : '○'}</span>
                   <span className={`text-sm ${item.done ? 'text-white' : 'text-slate-400'}`}>{item.label}</span>
                 </div>
               ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <button className="button-primary" onClick={() => finish('contents')} type="button">
-                Go to Contents
+                Review My Items
               </button>
               <button className="button-secondary" onClick={() => finish('maximizer')} type="button">
-                Go to Maximizer
+                Maximize My Claim
               </button>
             </div>
           </div>
@@ -1603,7 +1599,7 @@ export function WizardSteps() {
           <span className="text-slate-500">Step {wizard.step}/{steps.length}</span>{' · '}{steps[wizard.step - 1]}
         </h2>
         <button className="text-xs text-slate-400 hover:text-white" onClick={closeWizard} type="button">
-          Skip
+          Exit
         </button>
       </div>
 
@@ -1618,11 +1614,11 @@ export function WizardSteps() {
           </button>
           <div className="flex gap-3">
             <button className="button-secondary text-sm" onClick={closeWizard} type="button">
-              Close
+              Save and Exit
             </button>
             {wizard.step < steps.length ? (
               <button className="button-primary text-sm" onClick={nextStep} type="button">
-                Next
+                Next Step
               </button>
             ) : null}
           </div>
