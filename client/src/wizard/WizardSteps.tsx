@@ -1161,27 +1161,6 @@ export function WizardSteps() {
               </div>
             </div>
 
-            {expenseSubStep === 2 && (
-              <WeatherCard
-                address={data.dashboard.insuredAddress || data.claim.propertyAddress || ''}
-                dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss || ''}
-                utilityDateRanges={utilityRanges}
-                onWeatherLoaded={(summary) => {
-                  updateData((current) => ({
-                    ...current,
-                    expenses: {
-                      ...current.expenses,
-                      weatherEvidence: summary,
-                      utilityEntries: current.expenses.utilityEntries.map((e) => ({
-                        ...e,
-                        supportingEvidence: e.supportingEvidence || summary,
-                      })),
-                    },
-                  }))
-                }}
-              />
-            )}
-
             {/* ── Interview card flow for Living Expenses (step 9.4) ── */}
             {(current as { isInterview?: boolean }).isInterview ? (() => {
               const aleCards = [
@@ -1395,6 +1374,27 @@ export function WizardSteps() {
                 </button>
               </div>
             </div>
+
+            {expenseSubStep === 2 && (
+              <WeatherCard
+                address={data.dashboard.insuredAddress || data.claim.propertyAddress || ''}
+                dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss || ''}
+                utilityDateRanges={utilityRanges}
+                onWeatherLoaded={(summary) => {
+                  updateData((current) => ({
+                    ...current,
+                    expenses: {
+                      ...current.expenses,
+                      weatherEvidence: summary,
+                      utilityEntries: current.expenses.utilityEntries.map((e) => ({
+                        ...e,
+                        supportingEvidence: e.supportingEvidence || summary,
+                      })),
+                    },
+                  }))
+                }}
+              />
+            )}
 
             <ExpenseModal
               expense={editingExpense}

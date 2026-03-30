@@ -141,28 +141,6 @@ export function Expenses() {
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
-          <WeatherCard
-            address={data.dashboard.insuredAddress || data.claim.propertyAddress}
-            dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss}
-            utilityDateRanges={data.expenses.utilityEntries.map((entry) => ({
-              start: entry.dateStart,
-              end: entry.dateEnd,
-              label: `${entry.utilityType || 'Utility'} · ${fmtUSDate(entry.dateStart)} to ${fmtUSDate(entry.dateEnd)}`,
-            }))}
-            onWeatherLoaded={(summary) => {
-              updateData((current) => ({
-                ...current,
-                expenses: {
-                  ...current.expenses,
-                  weatherEvidence: summary,
-                  utilityEntries: current.expenses.utilityEntries.map((e) => ({
-                    ...e,
-                    supportingEvidence: e.supportingEvidence || summary,
-                  })),
-                },
-              }))
-            }}
-          />
           <UtilityEstimator />
         </div>
 
@@ -189,6 +167,29 @@ export function Expenses() {
           )) : <EmptyState body="Add the first ALE or supporting expense to start the category breakdown and reimbursement total." title="No Expenses Yet" />}
         </div>
       </section>
+
+      <WeatherCard
+        address={data.dashboard.insuredAddress || data.claim.propertyAddress}
+        dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss}
+        utilityDateRanges={data.expenses.utilityEntries.map((entry) => ({
+          start: entry.dateStart,
+          end: entry.dateEnd,
+          label: `${entry.utilityType || 'Utility'} · ${fmtUSDate(entry.dateStart)} to ${fmtUSDate(entry.dateEnd)}`,
+        }))}
+        onWeatherLoaded={(summary) => {
+          updateData((current) => ({
+            ...current,
+            expenses: {
+              ...current.expenses,
+              weatherEvidence: summary,
+              utilityEntries: current.expenses.utilityEntries.map((e) => ({
+                ...e,
+                supportingEvidence: e.supportingEvidence || summary,
+              })),
+            },
+          }))
+        }}
+      />
 
       <ExpenseModal
         expense={editingExpense}
