@@ -24,7 +24,7 @@ function ExpenseCard({ entry, onEdit, onDelete }: { entry: ExpenseEntry; onEdit:
           <p className="text-xs uppercase tracking-[0.2em] text-sky-300">{entry.category || 'Expense'}</p>
           <h3 className="mt-2 text-lg font-semibold text-white">{entry.description || entry.vendor || 'Untitled expense'}</h3>
           <p className="mt-2 text-sm text-slate-400">
-            {[fmtUSDate(entry.dateStart || entry.date), entry.dateEnd ? `to ${fmtUSDate(entry.dateEnd)}` : '', entry.vendor ? `Vendor: ${entry.vendor}` : '']
+            {[fmtUSDate(entry.dateStart || entry.date), entry.dateEnd ? `to ${fmtUSDate(entry.dateEnd)}` : '', entry.vendor || '']
               .filter(Boolean)
               .join(' · ')}
           </p>

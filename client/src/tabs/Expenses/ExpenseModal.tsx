@@ -55,6 +55,21 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
   const isUtility = category === 'Utilities'
   const isLabor = category === 'Emergency Mitigation - Cleanup'
   const isDisposal = category === 'Disposal'
+
+  function getVendorLabel(cat: string): string {
+    switch (cat) {
+      case 'Emergency Mitigation - Cleanup': return 'Who did the work?'
+      case 'Utilities': return 'Utility provider'
+      case 'Disposal': return 'Hauling company'
+      case 'Lodging': return 'Hotel / lodging name'
+      case 'Food': return 'Restaurant / store'
+      case 'Transportation': return 'Service / provider'
+      case 'Storage': return 'Storage facility'
+      case 'Laundry': return 'Laundromat / service'
+      case 'Pet Care': return 'Boarding facility / service'
+      default: return 'Provider / company'
+    }
+  }
   const usesDateRange = isUtility || ['Lodging', 'Food', 'Transportation', 'Storage', 'Laundry', 'Pet Care'].includes(category)
   const totalDays = calcExpenseDays(draft.dateStart, draft.dateEnd)
   const normalized = useMemo(() => updateExpenseLineTotal(draft), [draft])
@@ -95,7 +110,7 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
             </select>
           </label>
           <label className="space-y-2">
-            <span className="text-sm font-medium text-slate-200">{isLabor ? 'Who did the work?' : 'Vendor'}</span>
+            <span className="text-sm font-medium text-slate-200">{getVendorLabel(category)}</span>
             <input className="field" onChange={(event) => setDraft((current) => ({ ...current, vendor: event.target.value }))} placeholder={isLabor ? 'e.g. Rich Archer, family member' : ''} value={draft.vendor || ''} />
           </label>
 
