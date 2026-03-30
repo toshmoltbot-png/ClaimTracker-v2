@@ -1,4 +1,5 @@
 import { createDefaultClaimData, type AIPhoto, type ClaimData, type ContentItem } from '@/types/claim'
+import { updateRoomDimensions } from '@/lib/claimWorkflow'
 
 const underminingPattern =
   /elevated surface|on elevated|no direct contact|can be cleaned|can be sanitized|not in direct contact|above floor level|on a table|on a shelf|placed on|was operating in|internal ventilation pathways|cooling fans may draw|draw contaminated air into internal|recommend cleaning|recommend inspection|recommend reuse|recommend sanitiz|suitable for cleaning|no visible contamination|potentially damp|potentially contaminated|unknown environment|unknown contamination|limited direct contact|limited contamination|limited risk|minimal direct|minimal risk|minor surface/i
@@ -74,7 +75,7 @@ export function normalizePhotoMetadata(claimData: ClaimData): ClaimData {
   return {
     ...claimData,
     photoLibrary: claimData.photoLibrary.map((photo, index) => normalizeFileMetadata(photo, index)),
-    rooms: claimData.rooms.map((room) => ({
+    rooms: claimData.rooms.map((room) => updateRoomDimensions({
       ...room,
       photos: (room.photos || []).map((photo, index) => normalizeFileMetadata(photo, index)),
     })),
