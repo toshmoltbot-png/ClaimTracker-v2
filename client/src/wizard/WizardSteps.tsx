@@ -1405,38 +1405,108 @@ export function WizardSteps() {
           </div>
         )
       }
-      case 11:
+      case 11: {
+        const aiPhotos = data.aiPhotos || []
+        const totalAI = aiPhotos.length
+        const completedAI = aiPhotos.filter((p) => (p as Record<string, unknown>).status === 'complete').length
+        const failedAI = aiPhotos.filter((p) => (p as Record<string, unknown>).status === 'failed').length
+        const analyzingAI = aiPhotos.filter((p) => (p as Record<string, unknown>).status === 'analyzing').length
+        const pendingAI = totalAI - completedAI - failedAI - analyzingAI
+        const progressAI = totalAI > 0 ? Math.round((completedAI / totalAI) * 100) : 0
+        const allDone = totalAI > 0 && pendingAI === 0 && analyzingAI === 0
+        const itemsFound = (data.contents || []).length
+
         return (
-          <div className="grid gap-5 lg:grid-cols-[0.9fr,1.1fr]">
-            <div className="rounded-3xl border border-[color:var(--border)] bg-slate-950/35 p-5">
-              <h3 className="text-lg font-semibold text-white">Launch AI analysis</h3>
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-lg font-semibold text-white">AI Analysis</h3>
               <p className="mt-2 text-sm leading-7 text-slate-300">
-                Send your photo library to AI Builder, then run pre-screen or full analysis from the dedicated tab.
+                {totalAI === 0
+                  ? 'No photos in the AI queue. Import your room and item photos, then run analysis.'
+                  : allDone
+                    ? `Analysis complete. ${completedAI} photo${completedAI === 1 ? '' : 's'} processed, ${itemsFound} item${itemsFound === 1 ? '' : 's'} identified.`
+                    : analyzingAI > 0
+                      ? `Analyzing photo ${completedAI + 1} of ${totalAI}... This may take a few minutes.`
+                      : `${totalAI} photo${totalAI === 1 ? '' : 's'} ready for analysis.`}
               </p>
-              <button className="button-primary mt-5 w-full" onClick={launchAI} type="button">
-                Open AI Builder
-              </button>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Photos ready</p>
-                <p className="mt-3 text-2xl font-semibold text-white">{photoEntries.length}</p>
+
+            {/* Progress bar */}
+            {totalAI > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-300">{completedAI} of {totalAI} analyzed</span>
+                  <span className={allDone ? 'text-emerald-400' : analyzingAI > 0 ? 'text-amber-300' : 'text-slate-400'}>{progressAI}%</span>
+                </div>
+                <div className="h-3 rounded-full bg-slate-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${allDone ? 'bg-emerald-500' : analyzingAI > 0 ? 'bg-amber-400 animate-pulse' : 'bg-sky-500'}`}
+                    style={{ width: `${Math.max(progressAI, 2)}%` }}
+                  />
+                </div>
+                {failedAI > 0 && (
+                  <p className="text-xs text-rose-400">{failedAI} photo{failedAI === 1 ? '' : 's'} failed — you can retry from the AI Builder tab.</p>
+                )}
               </div>
-              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">AI queue</p>
-                <p className="mt-3 text-2xl font-semibold text-white">{data.aiPhotos.length}</p>
+            )}
+
+            {/* Stats */}
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3 text-center">
+                <p className="text-2xl font-semibold text-white">{totalAI}</p>
+                <p className="mt-1 text-xs text-slate-400">In queue</p>
               </div>
-              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Receipts</p>
-                <p className="mt-3 text-2xl font-semibold text-white">{data.receipts.length}</p>
+              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3 text-center">
+                <p className="text-2xl font-semibold text-emerald-400">{completedAI}</p>
+                <p className="mt-1 text-xs text-slate-400">Analyzed</p>
               </div>
-              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Expenses</p>
-                <p className="mt-3 text-2xl font-semibold text-white">{data.expenses.laborEntries.length + data.expenses.utilityEntries.length + data.expenses.disposalEntries.length + data.expenses.livingEntries.length + data.expenses.miscEntries.length}</p>
+              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3 text-center">
+                <p className="text-2xl font-semibold text-white">{itemsFound}</p>
+                <p className="mt-1 text-xs text-slate-400">Items found</p>
               </div>
+              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3 text-center">
+                <p className="text-2xl font-semibold text-white">{data.receipts.length}</p>
+                <p className="mt-1 text-xs text-slate-400">Receipts</p>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-3">
+              {totalAI === 0 && (
+                <button className="button-primary" onClick={() => {
+                  updateData((current) => ({
+                    ...current,
+                    aiPhotos: current.aiPhotos.length ? current.aiPhotos : autoImportPhotosToAIBuilder(current),
+                    aiNeedsUpdate: true,
+                  }))
+                  pushToast('Photos imported to AI queue.', 'success')
+                }} type="button">
+                  Import Photos to AI Queue
+                </button>
+              )}
+              {totalAI > 0 && !allDone && analyzingAI === 0 && (
+                <button className="button-primary" onClick={() => {
+                  launchAI()
+                }} type="button">
+                  Run AI Analysis
+                </button>
+              )}
+              {allDone && (
+                <button className="button-primary" onClick={nextStep} type="button">
+                  Continue to Review
+                </button>
+              )}
+              <button className="button-secondary" onClick={() => {
+                setActiveTab('ai-builder')
+                window.location.hash = '#ai-builder'
+                setWizardOpen(false)
+              }} type="button">
+                Open Full AI Builder
+              </button>
             </div>
           </div>
         )
+      }
       case 12: {
         const itemCount = (data.contents || []).filter((i) => i.includedInClaim !== false).length
         const totalValue = (data.contents || []).reduce((sum, i) => sum + Number(i.replacementCost || 0), 0)
