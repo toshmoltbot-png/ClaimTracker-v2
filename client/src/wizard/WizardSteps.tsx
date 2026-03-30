@@ -1337,34 +1337,41 @@ export function WizardSteps() {
                   <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
                     {current.entries.map((expense) => {
                       const expDate = fmtUSDate(expense.dateStart || expense.date) || ''
+                      const expDateEnd = expense.dateEnd ? fmtUSDate(expense.dateEnd) : ''
                       const hrs = Number(expense.hours || 0)
                       const rate = Number(expense.hourlyRate || 0)
                       const hrsLabel = hrs && rate ? `${hrs} hrs × $${rate}/hr` : ''
                       const rawTitle = expense.description || expense.vendor || expense.category || 'Expense'
                       const title = rawTitle.length > 80 ? rawTitle.slice(0, 77) + '...' : rawTitle
-                      const details = [expDate, hrsLabel, formatCurrency(Number(expense.amount || (expense as Record<string, unknown>).totalAmount || 0))].filter(Boolean).join(' · ')
+                      const details = [expDate && expDateEnd ? `${expDate} – ${expDateEnd}` : expDate, hrsLabel, formatCurrency(Number(expense.amount || (expense as Record<string, unknown>).totalAmount || 0))].filter(Boolean).join(' · ')
+                      const weatherNote = expense.supportingEvidence || ''
                       return (
-                      <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
-                        <div>
-                          <p className="text-sm font-medium text-white">{title}</p>
-                          <p className="text-xs text-slate-400">{details}</p>
+                      <div className="rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-white">{title}</p>
+                            <p className="text-xs text-slate-400">{details}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                              onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }}
+                              type="button"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
+                              onClick={() => updateData((currentData) => ({ ...currentData, expenses: removeExpenseEntry(currentData.expenses, expense) }))}
+                              type="button"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
-                            onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }}
-                            type="button"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
-                            onClick={() => updateData((currentData) => ({ ...currentData, expenses: removeExpenseEntry(currentData.expenses, expense) }))}
-                            type="button"
-                          >
-                            Delete
-                          </button>
-                        </div>
+                        {weatherNote && (
+                          <p className="mt-2 text-xs text-amber-200/80 border-t border-white/5 pt-2">{weatherNote}</p>
+                        )}
                       </div>
                     )})}
                   </div>
