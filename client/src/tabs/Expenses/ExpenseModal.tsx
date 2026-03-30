@@ -15,13 +15,15 @@ interface ExpenseModalProps {
   expense: ExpenseEntry | null
   onClose: () => void
   onSave: (expense: ExpenseEntry) => void
+  /** When true, category is locked and cannot be changed (wizard context) */
+  lockCategory?: boolean
 }
 
 function createDraft(expense: ExpenseEntry | null) {
   return updateExpenseLineTotal(expense || createExpenseEntryDraft())
 }
 
-export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalProps) {
+export function ExpenseModal({ open, expense, onClose, onSave, lockCategory }: ExpenseModalProps) {
   const [draft, setDraft] = useState<ExpenseEntry>(createDraft(expense))
 
   useEffect(() => {
@@ -140,6 +142,9 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-200">Category</span>
+            {lockCategory ? (
+              <p className="field pointer-events-none bg-slate-800/50 text-slate-300">{category}</p>
+            ) : (
             <select
               className="field"
               onChange={(event) => {
@@ -154,6 +159,7 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
                 </option>
               ))}
             </select>
+            )}
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-200">{getVendorLabel(category)}</span>

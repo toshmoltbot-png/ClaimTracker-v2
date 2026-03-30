@@ -1260,6 +1260,7 @@ export function WizardSteps() {
 
             <ExpenseModal
               expense={editingExpense}
+              lockCategory
               onClose={() => { setExpenseModalOpen(false); setEditingExpense(null) }}
               onSave={(expense) => {
                 const isNew = !getExpenseEntriesByCategory(data.expenses).some((e) => String(e.id) === String(expense.id))
