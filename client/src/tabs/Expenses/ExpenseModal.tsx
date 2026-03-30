@@ -136,7 +136,7 @@ export function ExpenseModal({ open, expense, onClose, onSave, lockCategory }: E
       }
       onClose={onClose}
       open={open}
-      title={expense ? 'Edit Expense' : 'Add Expense'}
+      title={lockCategory ? (expense ? `Edit ${category}` : `Add ${category}`) : (expense ? 'Edit Expense' : 'Add Expense')}
     >
       <div className="space-y-5">
         <div className="grid gap-4 md:grid-cols-2">
@@ -328,7 +328,7 @@ export function ExpenseModal({ open, expense, onClose, onSave, lockCategory }: E
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-white">Line Items</h3>
-                <p className="text-xs text-slate-400">Use line items for hotel nights, meals, rides, storage, and similar ALE details.</p>
+                <p className="text-xs text-slate-400">Break this expense into individual line items if it covers multiple costs.</p>
               </div>
               <button
                 className="button-secondary"
