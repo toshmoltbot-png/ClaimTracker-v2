@@ -1055,12 +1055,12 @@ export function WizardSteps() {
             {/* ── Interview card flow for Living Expenses (step 9.4) ── */}
             {(current as { isInterview?: boolean }).isInterview ? (() => {
               const aleCards = [
-                { category: 'Lodging' as const, emoji: '🏨', question: 'Were you displaced from your home?', hint: 'Hotel, motel, Airbnb, or staying with family — any lodging cost while you couldn\'t live at home.', example: 'Hampton Inn, 14 nights @ $129/night' },
-                { category: 'Food' as const, emoji: '🍽️', question: 'Did you spend more on food than normal?', hint: 'Without a kitchen, you likely ate out or bought prepared meals. The INCREASE over your normal grocery budget is reimbursable.', example: 'Family of 4, restaurant meals for 2 weeks' },
-                { category: 'Transportation' as const, emoji: '🚗', question: 'Did you have extra driving or travel costs?', hint: 'Longer commute from temporary housing, trips back to the property for inspections, moving supplies — all reimbursable mileage/costs.', example: 'Daily 30-mile roundtrip from hotel to work' },
-                { category: 'Storage' as const, emoji: '📦', question: 'Did you need to store your belongings?', hint: 'Storage unit, PODS container, or any temporary storage while your home was being repaired.', example: '10×10 storage unit, 2 months @ $150/mo' },
-                { category: 'Laundry' as const, emoji: '🧺', question: 'Did you use a laundromat or laundry service?', hint: 'If your washer/dryer was damaged or inaccessible, laundry costs are reimbursable.', example: 'Weekly laundromat trips, $25/week' },
-                { category: 'Pet Care' as const, emoji: '🐾', question: 'Did you need pet boarding or extra pet care?', hint: 'If your temporary housing didn\'t allow pets, boarding and kennel costs are covered.', example: 'Dog boarding, 10 days @ $45/day' },
+                { category: 'Lodging' as const, question: 'Were you displaced from your home?', hint: 'Hotel, motel, Airbnb, or staying with family — any lodging cost while you couldn\'t live at home.', example: 'Hampton Inn, 14 nights @ $129/night' },
+                { category: 'Food' as const, question: 'Did you spend more on food than normal?', hint: 'Without a kitchen, you likely ate out or bought prepared meals. The INCREASE over your normal grocery budget is reimbursable.', example: 'Family of 4, restaurant meals for 2 weeks' },
+                { category: 'Transportation' as const, question: 'Did you have extra driving or travel costs?', hint: 'Longer commute from temporary housing, trips back to the property for inspections, moving supplies — all reimbursable mileage/costs.', example: 'Daily 30-mile roundtrip from hotel to work' },
+                { category: 'Storage' as const, question: 'Did you need to store your belongings?', hint: 'Storage unit, PODS container, or any temporary storage while your home was being repaired.', example: '10×10 storage unit, 2 months @ $150/mo' },
+                { category: 'Laundry' as const, question: 'Did you use a laundromat or laundry service?', hint: 'If your washer/dryer was damaged or inaccessible, laundry costs are reimbursable.', example: 'Weekly laundromat trips, $25/week' },
+                { category: 'Pet Care' as const, question: 'Did you need pet boarding or extra pet care?', hint: 'If your temporary housing didn\'t allow pets, boarding and kennel costs are covered.', example: 'Dog boarding, 10 days @ $45/day' },
               ]
               const cardEntries = (cat: string) => current.entries.filter((e) => e.category === cat)
               const card = aleCards[aleCardIndex] || aleCards[0]
@@ -1086,7 +1086,7 @@ export function WizardSteps() {
                               skipped ? 'border-slate-500 bg-slate-600' :
                               'border-slate-600 bg-transparent'
                             }`}
-                            title={`${c.emoji} ${c.category}${hasEntries ? ' ✅' : skipped ? ' — skipped' : ''}`}
+                            title={`${c.category}${hasEntries ? ' — added' : skipped ? ' — skipped' : ''}`}
                             type="button"
                           />
                         )
@@ -1097,7 +1097,7 @@ export function WizardSteps() {
                   {/* Current card */}
                   <div className="rounded-2xl border border-emerald-400/20 bg-slate-950/40 p-5 space-y-4">
                     <div>
-                      <p className="text-2xl">{card.emoji}</p>
+                      <p className="text-xs font-medium uppercase tracking-widest text-emerald-300">{card.category}</p>
                       <h4 className="mt-2 text-lg font-semibold text-white">{card.question}</h4>
                       <p className="mt-2 text-sm leading-7 text-slate-300">{card.hint}</p>
                       <p className="mt-1 text-xs text-slate-500 italic">Example: {card.example}</p>
@@ -1106,7 +1106,7 @@ export function WizardSteps() {
                     {/* Existing entries for this category */}
                     {thisEntries.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs font-medium text-emerald-400">✅ {thisEntries.length} entr{thisEntries.length === 1 ? 'y' : 'ies'} added — {formatCurrency(thisEntries.reduce((s, e) => s + Number(e.amount || 0), 0))}</p>
+                        <p className="text-xs font-medium text-emerald-400">{thisEntries.length} entr{thisEntries.length === 1 ? 'y' : 'ies'} added — {formatCurrency(thisEntries.reduce((s, e) => s + Number(e.amount || 0), 0))}</p>
                         {thisEntries.map((expense) => (
                           <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-400/20 bg-emerald-950/30 px-4 py-2" key={String(expense.id)}>
                             <div>
@@ -1178,7 +1178,7 @@ export function WizardSteps() {
                         Next question →
                       </button>
                     ) : (
-                      <p className="text-xs text-emerald-400">✅ All living expense questions covered</p>
+                      <p className="text-xs text-emerald-400">All living expense questions covered</p>
                     )}
                   </div>
 
