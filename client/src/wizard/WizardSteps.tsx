@@ -101,6 +101,8 @@ export function WizardSteps() {
   const [editingExpense, setEditingExpense] = useState<ExpenseEntry | null>(null)
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
   const [expenseSubStep, setExpenseSubStep] = useState(1)
+  const [aleCardIndex, setAleCardIndex] = useState(0)
+  const [aleSkipped, setAleSkipped] = useState<Set<string>>(new Set())
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`📄 ${file.name} — processing...`)
@@ -166,7 +168,7 @@ export function WizardSteps() {
   }, [wizard.step])
 
   useEffect(() => {
-    if (wizard.step === 9) setExpenseSubStep(1)
+    if (wizard.step === 9) { setExpenseSubStep(1); setAleCardIndex(0) }
   }, [wizard.step])
 
   const contentRef = { current: null as HTMLDivElement | null }
@@ -955,7 +957,7 @@ export function WizardSteps() {
             key: 4,
             title: 'Living Expenses',
             subtitle: 'Lodging, food, transportation, etc.',
-            helper: 'Hotel stays, meals, laundry, pet boarding, storage — if you were displaced, these are covered under Additional Living Expenses (ALE).',
+            helper: 'Answer each question below. We\'ll walk you through every type of living expense so nothing gets missed and nothing gets duplicated.',
             theme: {
               wrapper: 'border-emerald-400/25 bg-emerald-400/10',
               accentText: 'text-emerald-200',
@@ -963,6 +965,7 @@ export function WizardSteps() {
             },
             defaultCategory: 'Lodging' as const,
             entries: (data.expenses.livingEntries || []).map((e) => ({ ...e, category: e.category || 'Lodging' })),
+            isInterview: true,
           },
           {
             key: 5,
@@ -1003,13 +1006,15 @@ export function WizardSteps() {
                   <h3 className="mt-2 text-xl font-semibold text-white">{current.title}</h3>
                   <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-200">{current.helper}</p>
                 </div>
-                <button
-                  className={`rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${current.theme.accentButton}`}
-                  onClick={() => quickAddExpense(current.defaultCategory, '', 0)}
-                  type="button"
-                >
-                  + Add Entry
-                </button>
+                {!(current as { isInterview?: boolean }).isInterview && (
+                  <button
+                    className={`rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${current.theme.accentButton}`}
+                    onClick={() => quickAddExpense(current.defaultCategory, '', 0)}
+                    type="button"
+                  >
+                    + Add Entry
+                  </button>
+                )}
               </div>
 
               <div className="mt-4 flex items-center gap-2">
@@ -1047,53 +1052,193 @@ export function WizardSteps() {
               />
             )}
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-slate-300">Entries <span className="text-slate-500">({current.entries.length})</span></h4>
-                <p className="text-sm font-semibold text-emerald-400">Subtotal: {formatCurrency(subtotal)}</p>
-              </div>
+            {/* ── Interview card flow for Living Expenses (step 9.4) ── */}
+            {(current as { isInterview?: boolean }).isInterview ? (() => {
+              const aleCards = [
+                { category: 'Lodging' as const, emoji: '🏨', question: 'Were you displaced from your home?', hint: 'Hotel, motel, Airbnb, or staying with family — any lodging cost while you couldn\'t live at home.', example: 'Hampton Inn, 14 nights @ $129/night' },
+                { category: 'Food' as const, emoji: '🍽️', question: 'Did you spend more on food than normal?', hint: 'Without a kitchen, you likely ate out or bought prepared meals. The INCREASE over your normal grocery budget is reimbursable.', example: 'Family of 4, restaurant meals for 2 weeks' },
+                { category: 'Transportation' as const, emoji: '🚗', question: 'Did you have extra driving or travel costs?', hint: 'Longer commute from temporary housing, trips back to the property for inspections, moving supplies — all reimbursable mileage/costs.', example: 'Daily 30-mile roundtrip from hotel to work' },
+                { category: 'Storage' as const, emoji: '📦', question: 'Did you need to store your belongings?', hint: 'Storage unit, PODS container, or any temporary storage while your home was being repaired.', example: '10×10 storage unit, 2 months @ $150/mo' },
+                { category: 'Laundry' as const, emoji: '🧺', question: 'Did you use a laundromat or laundry service?', hint: 'If your washer/dryer was damaged or inaccessible, laundry costs are reimbursable.', example: 'Weekly laundromat trips, $25/week' },
+                { category: 'Pet Care' as const, emoji: '🐾', question: 'Did you need pet boarding or extra pet care?', hint: 'If your temporary housing didn\'t allow pets, boarding and kennel costs are covered.', example: 'Dog boarding, 10 days @ $45/day' },
+              ]
+              const cardEntries = (cat: string) => current.entries.filter((e) => e.category === cat)
+              const card = aleCards[aleCardIndex] || aleCards[0]
+              const thisEntries = cardEntries(card.category)
+              const answered = aleCards.filter((c) => cardEntries(c.category).length > 0 || aleSkipped.has(c.category)).length
 
-              {current.entries.length ? (
-                <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
-                  {current.entries.map((expense) => {
-                    const expDate = fmtUSDate(expense.dateStart || expense.date) || ''
-                    const hrs = Number(expense.hours || 0)
-                    const rate = Number(expense.hourlyRate || 0)
-                    const hrsLabel = hrs && rate ? `${hrs} hrs × $${rate}/hr` : ''
-                    const title = expense.description || expense.vendor || expense.category || 'Expense'
-                    const details = [expDate, hrsLabel, formatCurrency(Number(expense.amount || (expense as Record<string, unknown>).totalAmount || 0))].filter(Boolean).join(' · ')
-                    return (
-                    <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
-                      <div>
-                        <p className="text-sm font-medium text-white">{title}</p>
-                        <p className="text-xs text-slate-400">{details}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
-                          onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }}
-                          type="button"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
-                          onClick={() => updateData((currentData) => ({ ...currentData, expenses: removeExpenseEntry(currentData.expenses, expense) }))}
-                          type="button"
-                        >
-                          Delete
-                        </button>
-                      </div>
+              return (
+                <div className="space-y-4">
+                  {/* Progress tracker */}
+                  <div className="flex items-center gap-3">
+                    <p className="text-xs text-slate-400">{answered} of {aleCards.length} answered</p>
+                    <div className="flex gap-1.5">
+                      {aleCards.map((c, i) => {
+                        const hasEntries = cardEntries(c.category).length > 0
+                        const skipped = aleSkipped.has(c.category)
+                        return (
+                          <button
+                            key={c.category}
+                            onClick={() => setAleCardIndex(i)}
+                            className={`h-3 w-3 rounded-full border transition-all ${
+                              i === aleCardIndex ? 'border-white scale-125' :
+                              hasEntries ? 'border-emerald-400 bg-emerald-400' :
+                              skipped ? 'border-slate-500 bg-slate-600' :
+                              'border-slate-600 bg-transparent'
+                            }`}
+                            title={`${c.emoji} ${c.category}${hasEntries ? ' ✅' : skipped ? ' — skipped' : ''}`}
+                            type="button"
+                          />
+                        )
+                      })}
                     </div>
-                  )})}
+                  </div>
+
+                  {/* Current card */}
+                  <div className="rounded-2xl border border-emerald-400/20 bg-slate-950/40 p-5 space-y-4">
+                    <div>
+                      <p className="text-2xl">{card.emoji}</p>
+                      <h4 className="mt-2 text-lg font-semibold text-white">{card.question}</h4>
+                      <p className="mt-2 text-sm leading-7 text-slate-300">{card.hint}</p>
+                      <p className="mt-1 text-xs text-slate-500 italic">Example: {card.example}</p>
+                    </div>
+
+                    {/* Existing entries for this category */}
+                    {thisEntries.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-emerald-400">✅ {thisEntries.length} entr{thisEntries.length === 1 ? 'y' : 'ies'} added — {formatCurrency(thisEntries.reduce((s, e) => s + Number(e.amount || 0), 0))}</p>
+                        {thisEntries.map((expense) => (
+                          <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-400/20 bg-emerald-950/30 px-4 py-2" key={String(expense.id)}>
+                            <div>
+                              <p className="text-sm text-white">{expense.description || expense.vendor || card.category}</p>
+                              <p className="text-xs text-slate-400">{fmtUSDate(expense.dateStart || expense.date)} · {formatCurrency(Number(expense.amount || 0))}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button className="text-xs text-sky-400 hover:text-sky-300" onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }} type="button">Edit</button>
+                              <button className="text-xs text-rose-400 hover:text-rose-300" onClick={() => updateData((cd) => ({ ...cd, expenses: removeExpenseEntry(cd.expenses, expense) }))} type="button">Delete</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {aleSkipped.has(card.category) && thisEntries.length === 0 && (
+                      <p className="text-sm text-slate-500">Marked as not applicable.</p>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        className="button-primary"
+                        onClick={() => quickAddExpense(card.category, '', 0)}
+                        type="button"
+                      >
+                        {thisEntries.length > 0 ? '+ Add Another' : 'Yes, Add This'}
+                      </button>
+                      {thisEntries.length === 0 && (
+                        <button
+                          className="button-secondary"
+                          onClick={() => {
+                            setAleSkipped((prev) => new Set([...prev, card.category]))
+                            if (aleCardIndex < aleCards.length - 1) setAleCardIndex((i) => i + 1)
+                          }}
+                          type="button"
+                        >
+                          Not Applicable
+                        </button>
+                      )}
+                      {aleSkipped.has(card.category) && thisEntries.length === 0 && (
+                        <button
+                          className="text-xs text-slate-500 hover:text-slate-300"
+                          onClick={() => setAleSkipped((prev) => { const next = new Set(prev); next.delete(card.category); return next })}
+                          type="button"
+                        >
+                          Undo skip
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card navigation */}
+                  <div className="flex items-center justify-between">
+                    <button
+                      className="text-xs text-slate-500 hover:text-slate-300"
+                      disabled={aleCardIndex === 0}
+                      onClick={() => setAleCardIndex((i) => Math.max(0, i - 1))}
+                      type="button"
+                    >
+                      ← Previous question
+                    </button>
+                    {aleCardIndex < aleCards.length - 1 ? (
+                      <button
+                        className="button-secondary text-sm"
+                        onClick={() => setAleCardIndex((i) => i + 1)}
+                        type="button"
+                      >
+                        Next question →
+                      </button>
+                    ) : (
+                      <p className="text-xs text-emerald-400">✅ All living expense questions covered</p>
+                    )}
+                  </div>
+
+                  {/* ALE subtotal */}
+                  <div className="flex items-center justify-between rounded-xl border border-emerald-400/20 bg-emerald-950/20 px-4 py-3">
+                    <span className="text-sm text-slate-300">Living Expenses Total</span>
+                    <span className="text-sm font-semibold text-emerald-400">{formatCurrency(subtotal)}</span>
+                  </div>
                 </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
-                  <p className="text-sm text-slate-400">No entries in this category yet.</p>
-                  <button className="mt-4 text-xs text-slate-500 hover:text-slate-300" onClick={goNext} type="button">Skip — nothing to add →</button>
+              )
+            })() : (
+              /* ── Standard entry list for non-interview sub-steps ── */
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-slate-300">Entries <span className="text-slate-500">({current.entries.length})</span></h4>
+                  <p className="text-sm font-semibold text-emerald-400">Subtotal: {formatCurrency(subtotal)}</p>
                 </div>
-              )}
-            </div>
+
+                {current.entries.length ? (
+                  <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
+                    {current.entries.map((expense) => {
+                      const expDate = fmtUSDate(expense.dateStart || expense.date) || ''
+                      const hrs = Number(expense.hours || 0)
+                      const rate = Number(expense.hourlyRate || 0)
+                      const hrsLabel = hrs && rate ? `${hrs} hrs × $${rate}/hr` : ''
+                      const title = expense.description || expense.vendor || expense.category || 'Expense'
+                      const details = [expDate, hrsLabel, formatCurrency(Number(expense.amount || (expense as Record<string, unknown>).totalAmount || 0))].filter(Boolean).join(' · ')
+                      return (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-3" key={String(expense.id)}>
+                        <div>
+                          <p className="text-sm font-medium text-white">{title}</p>
+                          <p className="text-xs text-slate-400">{details}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                            onClick={() => { setEditingExpense(expense); setExpenseModalOpen(true) }}
+                            type="button"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
+                            onClick={() => updateData((currentData) => ({ ...currentData, expenses: removeExpenseEntry(currentData.expenses, expense) }))}
+                            type="button"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )})}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
+                    <p className="text-sm text-slate-400">No entries in this category yet.</p>
+                    <button className="mt-4 text-xs text-slate-500 hover:text-slate-300" onClick={goNext} type="button">Skip — nothing to add →</button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <button className="text-xs text-slate-500 hover:text-slate-300" onClick={goBack} type="button">← Back</button>
