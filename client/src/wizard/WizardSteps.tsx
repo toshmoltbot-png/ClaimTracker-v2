@@ -785,61 +785,120 @@ export function WizardSteps() {
         )
       }
       case 6: {
-        const itemPhotosCount = (data.aiPhotos || []).length
+        const wizardItemPhotos = (data.aiPhotos || []).filter((p) => (p as Record<string, unknown>).source === 'wizard-item-upload')
+        const totalItemPhotos = wizardItemPhotos.length
         return (
           <div className="space-y-5">
-            <div>
-              <h3 className="text-lg font-semibold text-white">Upload photos of damaged items</h3>
-              <p className="mt-2 text-sm leading-7 text-slate-300">
-                Close-up photos of specific damaged belongings — furniture, appliances, electronics, clothing, personal items.
-                AI will use these to identify each item and build your contents inventory.
-              </p>
-              <p className="mt-2 text-xs text-slate-400">
-                Already uploaded room photos in the previous step? Great — those show the overall damage.
-                These photos should focus on individual items: the closer and more detailed, the better.
-              </p>
-            </div>
-            <PhotoUploader
-              label="Upload item photos (close-ups of damaged belongings)"
-              onFilesSelected={async (files) => {
-                setUploadingCount(files.length)
-                const stored = await Promise.all(
-                  files.map(async ({ file }) => {
-                    try {
-                      const uploaded = await uploadFile(file, 'item-photos')
-                      return {
-                        ...uploaded,
-                        id: crypto.randomUUID(),
-                        filename: file.name,
-                        status: 'pending' as const,
-                        analysisMode: 'ITEM_VIEW' as const,
-                        source: 'wizard-item-upload',
-                      }
-                    } catch (err) {
-                      console.warn('Item photo upload failed:', err)
-                      pushToast(`Failed to upload ${file.name}`, 'warning')
-                      return null
-                    }
-                  }),
-                ).then((results) => results.filter((r) => r !== null))
-                setUploadingCount(0)
-                updateData((current) => ({
-                  ...current,
-                  aiPhotos: [...current.aiPhotos, ...stored],
-                  aiNeedsUpdate: true,
-                }))
-                pushToast(`${stored.length} item photo${stored.length === 1 ? '' : 's'} uploaded.`, 'success')
-              }}
-            />
-            {uploadingCount > 0 && (
-              <p className="text-sm text-amber-300">{uploadingCount} uploading...</p>
-            )}
-            {itemPhotosCount > 0 && (
-              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-950/20 px-4 py-3">
-                <p className="text-sm text-emerald-300">{itemPhotosCount} item photo{itemPhotosCount === 1 ? '' : 's'} ready for AI analysis</p>
+            <div className="rounded-2xl border border-sky-400/30 bg-sky-950/20 p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-400">Item photos</p>
+                  <h3 className="text-xl font-bold text-white">Upload photos of damaged items</h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-300">
+                    Close-up photos of specific damaged belongings — furniture, appliances, electronics, clothing, personal items.
+                    The closer and more detailed, the better.
+                  </p>
+                </div>
+                <span className="rounded-full bg-sky-400/15 px-3 py-1 text-sm font-semibold text-sky-200">
+                  {totalItemPhotos} photo{totalItemPhotos === 1 ? '' : 's'}
+                  {uploadingCount > 0 && <span className="ml-1 text-amber-300">({uploadingCount} uploading...)</span>}
+                </span>
               </div>
+
+              <PhotoUploader
+                label="Upload item photos (close-ups of damaged belongings)"
+                onFilesSelected={async (files) => {
+                  setUploadingCount(files.length)
+                  let completed = 0
+                  const stored = await Promise.all(
+                    files.map(async ({ file }) => {
+                      try {
+                        const uploaded = await uploadFile(file, 'item-photos')
+                        completed++
+                        setUploadingCount(files.length - completed)
+                        return {
+                          ...uploaded,
+                          id: crypto.randomUUID(),
+                          filename: file.name,
+                          status: 'pending' as const,
+                          analysisMode: 'ITEM_VIEW' as const,
+                          source: 'wizard-item-upload',
+                        }
+                      } catch (err) {
+                        completed++
+                        setUploadingCount(files.length - completed)
+                        console.warn('Item photo upload failed:', err)
+                        pushToast(`Failed to upload ${file.name}`, 'warning')
+                        return null
+                      }
+                    }),
+                  ).then((results) => results.filter((r) => r !== null))
+                  setUploadingCount(0)
+                  updateData((current) => ({
+                    ...current,
+                    aiPhotos: [...current.aiPhotos, ...stored],
+                    aiNeedsUpdate: true,
+                  }))
+                  pushToast(`${stored.length} item photo${stored.length === 1 ? '' : 's'} uploaded.`, 'success')
+                }}
+              />
+
+              {/* Upload progress bar */}
+              {uploadingCount > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-amber-300">Uploading {uploadingCount} remaining...</span>
+                    <span className="text-slate-400">Please wait</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-700 overflow-hidden">
+                    <div className="h-full rounded-full bg-amber-400 transition-all animate-pulse" style={{ width: '60%' }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Thumbnail grid */}
+              {totalItemPhotos > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-300">
+                    {totalItemPhotos} photo{totalItemPhotos === 1 ? '' : 's'} ready for AI analysis
+                  </p>
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
+                    {wizardItemPhotos.map((photo) => {
+                      const photoKey = String((photo as Record<string, unknown>).id || (photo as Record<string, unknown>).url || (photo as Record<string, unknown>).path)
+                      const src = String((photo as Record<string, unknown>).url || (photo as Record<string, unknown>).dataUrl || (photo as Record<string, unknown>).data || '')
+                      const name = String((photo as Record<string, unknown>).name || (photo as Record<string, unknown>).filename || 'Item photo')
+                      return (
+                        <div className="group relative" key={photoKey}>
+                          <img
+                            alt={name}
+                            className="aspect-square rounded-xl object-cover"
+                            src={src}
+                          />
+                          <button
+                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100"
+                            onClick={() => {
+                              updateData((current) => ({
+                                ...current,
+                                aiPhotos: current.aiPhotos.filter((p) => String((p as Record<string, unknown>).id || (p as Record<string, unknown>).url || (p as Record<string, unknown>).path) !== photoKey),
+                              }))
+                              pushToast('Photo removed.', 'info')
+                            }}
+                            title="Remove photo"
+                            type="button"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {totalItemPhotos === 0 && uploadingCount === 0 && (
+              <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add these later</button>
             )}
-            <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add these later</button>
           </div>
         )
       }
