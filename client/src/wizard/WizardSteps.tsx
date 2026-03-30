@@ -1161,7 +1161,7 @@ export function WizardSteps() {
               </div>
             </div>
 
-            {(expenseSubStep === 1 || expenseSubStep === 2) && (
+            {expenseSubStep === 2 && (
               <WeatherCard
                 address={data.dashboard.insuredAddress || data.claim.propertyAddress || ''}
                 dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss || ''}
