@@ -73,6 +73,49 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
       default: return 'Provider / company'
     }
   }
+
+  function getVendorPlaceholder(cat: string): string {
+    switch (cat) {
+      case 'Emergency Mitigation - Cleanup': return 'e.g. Rich Archer, family member'
+      case 'Utilities': return 'e.g. National Grid, Eversource'
+      case 'Disposal': return 'e.g. Waste Management, local dump'
+      case 'Lodging': return 'e.g. Hampton Inn, Airbnb host'
+      case 'Food': return 'e.g. Walmart, local restaurant'
+      case 'Transportation': return 'e.g. Uber, personal vehicle'
+      case 'Storage': return 'e.g. Public Storage, PODS'
+      case 'Laundry': return 'e.g. Spin Cycle Laundromat'
+      case 'Pet Care': return 'e.g. PetSmart, local kennel'
+      default: return 'e.g. Company or individual name'
+    }
+  }
+
+  function getDescriptionPlaceholder(cat: string): string {
+    switch (cat) {
+      case 'Emergency Mitigation - Cleanup': return 'What work was performed?'
+      case 'Utilities': return 'e.g. Running 3 dehumidifiers 24/7'
+      case 'Disposal': return 'e.g. 20-yard dumpster rental, debris haul-off'
+      case 'Lodging': return 'e.g. Hampton Inn, 4 nights while displaced'
+      case 'Food': return 'e.g. Family meals while displaced, no kitchen access'
+      case 'Transportation': return 'e.g. Daily commute from hotel to property'
+      case 'Storage': return 'e.g. 10×10 unit for salvaged belongings'
+      case 'Laundry': return 'e.g. Weekly laundromat runs, no washer access'
+      case 'Pet Care': return 'e.g. Dog boarding while displaced'
+      default: return 'Describe the expense'
+    }
+  }
+
+  function getAmountLabel(cat: string): string {
+    switch (cat) {
+      case 'Disposal': return 'Amount'
+      case 'Lodging': return 'Nightly rate'
+      case 'Food': return 'Daily food cost'
+      case 'Transportation': return 'Daily cost'
+      case 'Storage': return 'Monthly cost'
+      case 'Laundry': return 'Cost per visit'
+      case 'Pet Care': return 'Daily boarding cost'
+      default: return 'Amount'
+    }
+  }
   const usesDateRange = isUtility || ['Lodging', 'Food', 'Transportation', 'Storage', 'Laundry', 'Pet Care'].includes(category)
   const totalDays = calcExpenseDays(draft.dateStart, draft.dateEnd)
   const normalized = useMemo(() => updateExpenseLineTotal(draft), [draft])
@@ -114,7 +157,7 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
           </label>
           <label className="space-y-2">
             <span className="text-sm font-medium text-slate-200">{getVendorLabel(category)}</span>
-            <input className="field" onChange={(event) => setDraft((current) => ({ ...current, vendor: event.target.value }))} placeholder={isLabor ? 'e.g. Rich Archer, family member' : ''} value={draft.vendor || ''} />
+            <input className="field" onChange={(event) => setDraft((current) => ({ ...current, vendor: event.target.value }))} placeholder={getVendorPlaceholder(category)} value={draft.vendor || ''} />
           </label>
 
           {!usesDateRange ? (
@@ -233,7 +276,7 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
 
           {!isUtility && !isLabor ? (
             <label className="space-y-2">
-              <span className="text-sm font-medium text-slate-200">{isDisposal ? 'Amount' : 'Daily cost / fallback amount'}</span>
+              <span className="text-sm font-medium text-slate-200">{getAmountLabel(category)}</span>
               <MoneyInput
                 min="0"
                 onChange={(event) =>
@@ -258,7 +301,7 @@ export function ExpenseModal({ open, expense, onClose, onSave }: ExpenseModalPro
 
           <label className={`space-y-2 ${isLabor ? '' : 'md:col-span-2'}`}>
             <span className="text-sm font-medium text-slate-200">Description</span>
-            <input className="field" onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="What work was performed?" value={draft.description || ''} />
+            <input className="field" onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder={getDescriptionPlaceholder(category)} value={draft.description || ''} />
           </label>
 
           {isLabor ? (
