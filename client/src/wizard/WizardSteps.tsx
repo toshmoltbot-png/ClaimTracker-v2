@@ -1139,11 +1139,13 @@ export function WizardSteps() {
                         <button
                           className="button-secondary"
                           onClick={() => {
+                            const isLast = aleCardIndex >= aleCards.length - 1
                             setAleSkipped((prev) => new Set([...prev, card.category]))
-                            if (aleCardIndex < aleCards.length - 1) {
-                              setAleCardIndex((i) => i + 1)
+                            if (isLast) {
+                              // Use setTimeout to ensure state update flushes before navigation
+                              setTimeout(() => goNext(), 0)
                             } else {
-                              goNext()
+                              setAleCardIndex((i) => i + 1)
                             }
                           }}
                           type="button"
@@ -1269,10 +1271,12 @@ export function WizardSteps() {
                 setEditingExpense(null)
                 pushToast(isNew ? 'Expense added.' : 'Expense updated.', 'success')
                 // Auto-advance ALE interview card after adding a new entry
-                if (isNew && (current as { isInterview?: boolean }).isInterview && aleCardIndex < 5) {
-                  setAleCardIndex((i) => i + 1)
-                } else if (isNew && (current as { isInterview?: boolean }).isInterview && aleCardIndex >= 5) {
-                  goNext()
+                if (isNew && (current as { isInterview?: boolean }).isInterview) {
+                  if (aleCardIndex < 5) {
+                    setAleCardIndex((i) => i + 1)
+                  } else {
+                    setTimeout(() => goNext(), 0)
+                  }
                 }
               }}
               open={expenseModalOpen}
