@@ -149,6 +149,19 @@ export function Expenses() {
               end: entry.dateEnd,
               label: `${entry.utilityType || 'Utility'} · ${fmtUSDate(entry.dateStart)} to ${fmtUSDate(entry.dateEnd)}`,
             }))}
+            onWeatherLoaded={(summary) => {
+              updateData((current) => ({
+                ...current,
+                expenses: {
+                  ...current.expenses,
+                  weatherEvidence: summary,
+                  utilityEntries: current.expenses.utilityEntries.map((e) => ({
+                    ...e,
+                    supportingEvidence: e.supportingEvidence || summary,
+                  })),
+                },
+              }))
+            }}
           />
           <UtilityEstimator />
         </div>

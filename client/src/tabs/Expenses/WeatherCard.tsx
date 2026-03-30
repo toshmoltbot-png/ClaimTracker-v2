@@ -4,6 +4,8 @@ interface WeatherCardProps {
   address: string
   dateOfLoss: string
   utilityDateRanges: Array<{ start?: string; end?: string; label?: string }>
+  /** Called with a formatted weather summary string whenever data loads, so parents can persist it */
+  onWeatherLoaded?: (summary: string) => void
 }
 
 interface WeatherSummary {
@@ -50,7 +52,7 @@ async function fetchWeather(latitude: number, longitude: number, start: string, 
   }
 }
 
-export function WeatherCard({ address, dateOfLoss, utilityDateRanges }: WeatherCardProps) {
+export function WeatherCard({ address, dateOfLoss, utilityDateRanges, onWeatherLoaded }: WeatherCardProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [lossWeather, setLossWeather] = useState<WeatherSummary | null>(null)
@@ -78,7 +80,20 @@ export function WeatherCard({ address, dateOfLoss, utilityDateRanges }: WeatherC
         ])
         if (cancelled) return
         setLossWeather(loss)
-        setRangeWeather(ranges.filter((entry): entry is { label: string; weather: WeatherSummary } => Boolean(entry.weather)).map((entry) => ({ label: entry.label, weather: entry.weather as WeatherSummary })))
+        const validRanges = ranges.filter((entry): entry is { label: string; weather: WeatherSummary } => Boolean(entry.weather)).map((entry) => ({ label: entry.label, weather: entry.weather as WeatherSummary }))
+        setRangeWeather(validRanges)
+
+        // Build a summary string for persistence
+        if (onWeatherLoaded) {
+          const parts: string[] = []
+          if (loss) {
+            parts.push(`Date of loss: avg ${loss.avg}°F (low ${loss.min}°F, high ${loss.max}°F)`)
+          }
+          for (const r of validRanges) {
+            parts.push(`${r.label}: avg ${r.weather.avg}°F (low ${r.weather.min}°F, high ${r.weather.max}°F)`)
+          }
+          if (parts.length) onWeatherLoaded(parts.join('. ') + '.')
+        }
       } catch (nextError) {
         if (!cancelled) setError(nextError instanceof Error ? nextError.message : 'Unable to load weather')
       } finally {

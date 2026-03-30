@@ -1026,8 +1026,25 @@ export function WizardSteps() {
               </div>
             </div>
 
-            {expenseSubStep === 1 && (
-              <WeatherCard address={data.dashboard.insuredAddress || data.claim.propertyAddress || ''} dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss || ''} utilityDateRanges={utilityRanges} />
+            {(expenseSubStep === 1 || expenseSubStep === 2) && (
+              <WeatherCard
+                address={data.dashboard.insuredAddress || data.claim.propertyAddress || ''}
+                dateOfLoss={data.dashboard.dateOfLoss || data.claim.dateOfLoss || ''}
+                utilityDateRanges={utilityRanges}
+                onWeatherLoaded={(summary) => {
+                  updateData((current) => ({
+                    ...current,
+                    expenses: {
+                      ...current.expenses,
+                      weatherEvidence: summary,
+                      utilityEntries: current.expenses.utilityEntries.map((e) => ({
+                        ...e,
+                        supportingEvidence: e.supportingEvidence || summary,
+                      })),
+                    },
+                  }))
+                }}
+              />
             )}
 
             <div className="space-y-2">

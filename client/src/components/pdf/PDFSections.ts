@@ -935,13 +935,27 @@ export async function renderExpenses(ctx: PDFSectionContext, onStatus?: (status:
   ctx.y = 15
   sectionHeader(ctx, 'Expenses')
   const weather = await loadWeatherSummary(ctx.data.dashboard.insuredAddress || ctx.data.claim.propertyAddress, ctx.data.dashboard.dateOfLoss || ctx.data.claim.dateOfLoss)
+  const storedWeather = (ctx.data.expenses as Record<string, unknown>)?.weatherEvidence as string | undefined
+  const weatherLines: string[] = []
   if (weather) {
+    weatherLines.push(`Date of loss (${fmtUSDate(weather.date)}): avg ${weather.avg}°F, low ${weather.min}°F, high ${weather.max}°F`)
+  }
+  if (storedWeather) {
+    // Add utility period temps if not already covered by the date-of-loss line
+    const parts = storedWeather.split('. ').filter((p) => p && !p.startsWith('Date of loss'))
+    weatherLines.push(...parts)
+  }
+  if (weatherLines.length) {
+    const boxText = weatherLines.join('. ').replace(/\.\./g, '.')
+    const lineCount = Math.ceil(boxText.length / 120)
+    const boxHeight = 10 + lineCount * 4
     ctx.doc.setFillColor(255, 251, 235)
     ctx.doc.setDrawColor(217, 119, 6)
-    ctx.doc.roundedRect(ctx.ML, ctx.y, ctx.CW, 13, 2, 2, 'FD')
+    ctx.doc.roundedRect(ctx.ML, ctx.y, ctx.CW, boxHeight, 2, 2, 'FD')
     ctx.doc.setFontSize(8.5)
-    ctx.doc.text(`Weather support for ${fmtUSDate(weather.date)}: avg ${weather.avg}°F, low ${weather.min}°F, high ${weather.max}°F.`, ctx.ML + 3, ctx.y + 8)
-    ctx.y += 18
+    const wrappedLines = ctx.doc.splitTextToSize(boxText, ctx.CW - 6)
+    ctx.doc.text(wrappedLines, ctx.ML + 3, ctx.y + 7)
+    ctx.y += boxHeight + 5
   }
   if (!ctx.expenseEntries.length) {
     setMutedText(ctx.doc)
@@ -955,13 +969,18 @@ export async function renderExpenses(ctx: PDFSectionContext, onStatus?: (status:
     startY: ctx.y,
     margin: { left: ctx.ML, right: ctx.MR },
     head: [['Date', 'Category', 'Description', 'Justification', 'Amount']],
-    body: ctx.expenseEntries.map((entry) => [
-      normalizeClaimDate(entry.dateStart || entry.date),
-      String(entry.category || 'Other'),
-      String(entry.description || entry.vendor || '—'),
-      String(entry.justification || '—'),
-      formatCurrency(Number(entry.amount || 0)),
-    ]),
+    body: ctx.expenseEntries.map((entry) => {
+      const desc = String(entry.description || entry.vendor || '—')
+      const detail = (entry as Record<string, unknown>).estimationDetail as string | undefined
+      const fullDesc = detail ? `${desc}\n(${detail})` : desc
+      return [
+        normalizeClaimDate(entry.dateStart || entry.date),
+        String(entry.category || 'Other'),
+        fullDesc,
+        String(entry.justification || entry.supportingEvidence || '—'),
+        formatCurrency(Number(entry.amount || 0)),
+      ]
+    }),
     styles: { fontSize: 8.5, cellPadding: 3 },
     headStyles: { fillColor: LIGHT_BLUE, textColor: NAVY, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [249, 250, 251] },
