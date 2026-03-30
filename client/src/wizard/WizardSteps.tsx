@@ -37,8 +37,9 @@ const steps = [
   'Claim Type',
   'Claim Info',
   'Rooms',
-  'Photos',
+  'Room Photos',
   'Photo Review',
+  'Item Photos',
   'Floor Plan',
   'Receipts',
   'Contractors',
@@ -51,9 +52,10 @@ const steps = [
 const stepTips: Partial<Record<number, string>> = {
   1: 'Start with the broad claim type. You can refine supporting detail later without breaking the workflow.',
   3: 'List every affected space, including hallways, closets, and transition areas. Those rooms matter in documentation and square footage.',
-  4: 'Use wide room shots here. Save close-up damaged item photos for AI Builder if you need item extraction.',
-  6: 'Drag rooms into approximate position. The point is layout clarity, not architectural perfection.',
-  8: 'Quick-add entries are enough to seed ALE tracking. You can refine line items later in the Expenses tab.',
+  4: 'Wide shots of each room showing the overall damage. You\'ll upload close-up item photos in the next step.',
+  6: 'Close-up photos of specific damaged items — furniture, appliances, belongings. AI will use these to build your inventory.',
+  7: 'Drag rooms into approximate position. The point is layout clarity, not architectural perfection.',
+  10: 'Quick-add entries are enough to seed ALE tracking. You can refine line items later in the Expenses tab.',
 }
 
 function buildRoomDraft(): Room {
@@ -168,7 +170,7 @@ export function WizardSteps() {
   }, [wizard.step])
 
   useEffect(() => {
-    if (wizard.step === 9) { setExpenseSubStep(1); setAleCardIndex(0) }
+    if (wizard.step === 10) { setExpenseSubStep(1); setAleCardIndex(0) }
   }, [wizard.step])
 
   const contentRef = { current: null as HTMLDivElement | null }
@@ -782,7 +784,66 @@ export function WizardSteps() {
           </div>
         )
       }
-      case 6:
+      case 6: {
+        const itemPhotosCount = (data.aiPhotos || []).length
+        return (
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Upload photos of damaged items</h3>
+              <p className="mt-2 text-sm leading-7 text-slate-300">
+                Close-up photos of specific damaged belongings — furniture, appliances, electronics, clothing, personal items.
+                AI will use these to identify each item and build your contents inventory.
+              </p>
+              <p className="mt-2 text-xs text-slate-400">
+                Already uploaded room photos in the previous step? Great — those show the overall damage.
+                These photos should focus on individual items: the closer and more detailed, the better.
+              </p>
+            </div>
+            <PhotoUploader
+              label="Upload item photos (close-ups of damaged belongings)"
+              onFilesSelected={async (files) => {
+                setUploadingCount(files.length)
+                const stored = await Promise.all(
+                  files.map(async ({ file }) => {
+                    try {
+                      const uploaded = await uploadFile(file, 'item-photos')
+                      return {
+                        ...uploaded,
+                        id: crypto.randomUUID(),
+                        filename: file.name,
+                        status: 'pending' as const,
+                        analysisMode: 'ITEM_VIEW' as const,
+                        source: 'wizard-item-upload',
+                      }
+                    } catch (err) {
+                      console.warn('Item photo upload failed:', err)
+                      pushToast(`Failed to upload ${file.name}`, 'warning')
+                      return null
+                    }
+                  }),
+                ).then((results) => results.filter((r) => r !== null))
+                setUploadingCount(0)
+                updateData((current) => ({
+                  ...current,
+                  aiPhotos: [...current.aiPhotos, ...stored],
+                  aiNeedsUpdate: true,
+                }))
+                pushToast(`${stored.length} item photo${stored.length === 1 ? '' : 's'} uploaded.`, 'success')
+              }}
+            />
+            {uploadingCount > 0 && (
+              <p className="text-sm text-amber-300">{uploadingCount} uploading...</p>
+            )}
+            {itemPhotosCount > 0 && (
+              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-950/20 px-4 py-3">
+                <p className="text-sm text-emerald-300">{itemPhotosCount} item photo{itemPhotosCount === 1 ? '' : 's'} ready for AI analysis</p>
+              </div>
+            )}
+            <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add these later</button>
+          </div>
+        )
+      }
+      case 7:
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
@@ -798,7 +859,7 @@ export function WizardSteps() {
             <FloorPlanCanvas />
           </div>
         )
-      case 7:
+      case 8:
         return (
           <div className="space-y-5">
             <PhotoUploader accept="image/*,application/pdf" label="Upload receipts (photos or PDFs)" onFilesSelected={(files) => void uploadReceipts(files)} />
@@ -864,7 +925,7 @@ export function WizardSteps() {
             />
           </div>
         )
-      case 8:
+      case 9:
         return (
           <div className="space-y-5">
             <h3 className="text-xl font-semibold text-white">Contractor Reports</h3>
@@ -912,7 +973,7 @@ export function WizardSteps() {
             <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">Skip — I'll add these later →</button>
           </div>
         )
-      case 9: {
+      case 10: {
         const steps9 = [
           {
             key: 1,
@@ -1002,7 +1063,7 @@ export function WizardSteps() {
             <div className={`rounded-3xl border px-5 py-5 ${current.theme.wrapper}`}>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className={`text-xs font-medium uppercase tracking-[0.2em] ${current.theme.accentText}`}>Step 9 · {expenseSubStep} of 5</p>
+                  <p className={`text-xs font-medium uppercase tracking-[0.2em] ${current.theme.accentText}`}>Step 10 · {expenseSubStep} of 5</p>
                   <h3 className="mt-2 text-xl font-semibold text-white">{current.title}</h3>
                   <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-200">{current.helper}</p>
                 </div>
@@ -1285,7 +1346,7 @@ export function WizardSteps() {
           </div>
         )
       }
-      case 10:
+      case 11:
         return (
           <div className="grid gap-5 lg:grid-cols-[0.9fr,1.1fr]">
             <div className="rounded-3xl border border-[color:var(--border)] bg-slate-950/35 p-5">
@@ -1317,7 +1378,7 @@ export function WizardSteps() {
             </div>
           </div>
         )
-      case 11: {
+      case 12: {
         const itemCount = (data.contents || []).filter((i) => i.includedInClaim !== false).length
         const totalValue = (data.contents || []).reduce((sum, i) => sum + Number(i.replacementCost || 0), 0)
         return (
@@ -1350,7 +1411,7 @@ export function WizardSteps() {
           </div>
         )
       }
-      case 12:
+      case 13:
         return (
           <div className="space-y-5">
             <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/10 px-5 py-5">
@@ -1364,8 +1425,9 @@ export function WizardSteps() {
                 { label: 'Claim type set', done: !!data.claimType },
                 { label: 'Claim details filled', done: !!(data.dashboard.claimNumber || data.claim.claimNumber) },
                 { label: 'Rooms added', done: (data.rooms || []).length > 0 },
-                { label: 'Photos uploaded', done: (data.photoLibrary || []).length > 0 || (data.rooms || []).some((r) => (r.photos || []).length > 0) },
-                { label: 'AI analysis started', done: (data.aiPhotos || []).length > 0 },
+                { label: 'Room photos uploaded', done: (data.rooms || []).some((r) => (r.photos || []).length > 0) },
+                { label: 'Item photos uploaded', done: (data.aiPhotos || []).some((p) => (p as Record<string, unknown>).source === 'wizard-item-upload') },
+                { label: 'AI analysis started', done: (data.aiPhotos || []).some((p) => (p as Record<string, unknown>).aiStatus === 'processed') },
                 { label: 'Contents inventory started', done: (data.contents || []).length > 0 },
                 { label: 'Expenses tracked', done: getExpensesTotal(data.expenses) > 0 },
               ].map((item) => (
