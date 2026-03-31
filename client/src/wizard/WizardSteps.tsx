@@ -196,7 +196,7 @@ export function WizardSteps() {
     }
   }, [wizard.step]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const contentRef = { current: null as HTMLDivElement | null }
+  const contentRef = useRef<HTMLDivElement | null>(null)
   const progress = Math.round((wizard.step / steps.length) * 100)
   const photoEntries = useMemo(() => buildPhotoLibraryEntries(data), [data])
   const wizardTip = !tipDismissed ? stepTips[wizard.step] : null
@@ -1585,6 +1585,7 @@ export function WizardSteps() {
         function addToStack(stackId: string, photoId: string) {
           const photo = ungroupedPhotos.find((p) => String(p.id) === photoId)
           if (!photo) return
+          const scrollTop = contentRef.current?.scrollTop ?? 0
           updateData((current) => ({
             ...current,
             aiPhotos: (current.aiPhotos || [])
@@ -1600,9 +1601,11 @@ export function WizardSteps() {
                 }
               }),
           }))
+          requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
         }
 
         function removeFromStack(stackId: string, photoId: string) {
+          const scrollTop = contentRef.current?.scrollTop ?? 0
           updateData((current) => {
             const stack = (current.aiPhotos || []).find((p) => String(p.id) === stackId)
             if (!stack?.isStack || !stack.stackPhotos) return current
@@ -1625,17 +1628,31 @@ export function WizardSteps() {
               ],
             }
           })
+          requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
         }
 
         function handleCreateGroup() {
           const selected = ungroupedPhotos.filter((p) => groupSelected.has(String(p.id)))
           if (selected.length < 2) return
+          const scrollTop = contentRef.current?.scrollTop ?? 0
           const stack = createPhotoStack(selected, data.aiAnalysisMode || 'ITEM_VIEW')
           updateData((current) => ({
             ...current,
             aiPhotos: [{ ...stack, name: `Group (${selected.length} photos)` }, ...(current.aiPhotos || []).filter((p) => !groupSelected.has(String(p.id)))],
           }))
           setGroupSelected(new Set())
+          // Restore scroll after React re-render
+          requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
+        }
+
+        function handleDeletePhoto(photoId: string) {
+          const scrollTop = contentRef.current?.scrollTop ?? 0
+          updateData((current) => ({
+            ...current,
+            aiPhotos: (current.aiPhotos || []).filter((p) => String(p.id) !== photoId),
+          }))
+          setGroupSelected((prev) => { const n = new Set(prev); n.delete(photoId); return n })
+          requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
         }
 
         function handleUngroupAll(stackId: string) {
@@ -1736,7 +1753,7 @@ export function WizardSteps() {
             </div>
 
             {/* Floating action bar — sticky at bottom of scroll area */}
-            {(groupSelected.size >= 2 || activeGroupId) && (
+            {(groupSelected.size >= 1 || activeGroupId) && (
               <div className="sticky bottom-0 z-10 -mx-5 border-t border-[color:var(--border)] bg-slate-900/95 px-5 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
                 {activeGroupId ? (
                   <div className="flex items-center gap-3">
@@ -1744,6 +1761,17 @@ export function WizardSteps() {
                     <span className="text-sm text-white flex-1">Editing {GROUP_COLORS[activeGroupColor >= 0 ? activeGroupColor % GROUP_COLORS.length : 0].label} group — tap photos to add/remove</span>
                     <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => handleUngroupAll(activeGroupId)} type="button">Ungroup</button>
                     <button className="button-primary px-3 py-1.5 text-xs" onClick={() => setActiveGroupId(null)} type="button">Done</button>
+                  </div>
+                ) : groupSelected.size === 1 ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-300">1 photo selected</span>
+                    <div className="flex gap-2">
+                      <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => setGroupSelected(new Set())} type="button">Cancel</button>
+                      <button className="rounded-lg bg-rose-500/90 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500" onClick={() => {
+                        const id = [...groupSelected][0]
+                        handleDeletePhoto(id)
+                      }} type="button">Delete Photo</button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
@@ -1977,7 +2005,7 @@ export function WizardSteps() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div ref={(el) => { contentRef.current = el }} className="flex-1 overflow-y-auto p-5 sm:p-6">
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-5 sm:p-6">
           {renderStep()}
         </div>
 
