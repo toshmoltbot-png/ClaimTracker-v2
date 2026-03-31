@@ -72,6 +72,7 @@ export function ExpenseModal({ open, expense, onClose, onSave, lockCategory }: E
       case 'Storage': return 'Storage facility'
       case 'Laundry': return 'Laundromat / service'
       case 'Pet Care': return 'Boarding facility / service'
+      case 'Refrigerated Property': return 'Store where purchased'
       default: return 'Provider / company'
     }
   }
@@ -87,6 +88,7 @@ export function ExpenseModal({ open, expense, onClose, onSave, lockCategory }: E
       case 'Storage': return 'e.g. Public Storage, PODS'
       case 'Laundry': return 'e.g. Spin Cycle Laundromat'
       case 'Pet Care': return 'e.g. PetSmart, local kennel'
+      case 'Refrigerated Property': return 'e.g. Costco, Stop & Shop, various'
       default: return 'e.g. Company or individual name'
     }
   }
@@ -102,6 +104,7 @@ export function ExpenseModal({ open, expense, onClose, onSave, lockCategory }: E
       case 'Storage': return 'e.g. 10×10 unit for salvaged belongings'
       case 'Laundry': return 'e.g. Weekly laundromat runs, no washer access'
       case 'Pet Care': return 'e.g. Dog boarding while displaced'
+      case 'Refrigerated Property': return 'e.g. Full refrigerator and freezer contents — meats, produce, dairy'
       default: return 'Describe the expense'
     }
   }
@@ -115,6 +118,7 @@ export function ExpenseModal({ open, expense, onClose, onSave, lockCategory }: E
       case 'Storage': return 'Monthly cost'
       case 'Laundry': return 'Cost per visit'
       case 'Pet Care': return 'Daily boarding cost'
+      case 'Refrigerated Property': return 'Total value of lost food'
       default: return 'Amount'
     }
   }
