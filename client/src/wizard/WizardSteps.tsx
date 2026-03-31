@@ -1254,6 +1254,7 @@ export function WizardSteps() {
                 { category: 'Storage' as const, question: 'Did you need to store your belongings?', hint: 'Storage unit, PODS container, or any temporary storage while your home was being repaired.', example: '10×10 storage unit, 2 months @ $150/mo' },
                 { category: 'Laundry' as const, question: 'Did you use a laundromat or laundry service?', hint: 'If your washer/dryer was damaged or inaccessible, laundry costs are reimbursable.', example: 'Weekly laundromat trips, $25/week' },
                 { category: 'Pet Care' as const, question: 'Did you need pet boarding or extra pet care?', hint: 'If your temporary housing didn\'t allow pets, boarding and kennel costs are covered.', example: 'Dog boarding, 10 days @ $45/day' },
+                { category: 'Refrigerated Property' as const, question: 'Did you lose food or other perishable items?', hint: 'If your power was out or refrigerator was damaged, spoiled food and perishables are a separate reimbursable category — often with its own policy limit.', example: 'Full refrigerator and freezer contents, ~$350' },
               ]
               const cardEntries = (cat: string) => current.entries.filter((e) => e.category === cat)
               const card = aleCards[aleCardIndex] || aleCards[0]
@@ -1495,7 +1496,7 @@ export function WizardSteps() {
                 pushToast(isNew ? 'Expense added.' : 'Expense updated.', 'success')
                 // Auto-advance ALE interview card after adding a new entry
                 if (isNew && (current as { isInterview?: boolean }).isInterview) {
-                  if (aleCardIndex < 5) {
+                  if (aleCardIndex < 6) {
                     setAleCardIndex((i) => i + 1)
                   } else {
                     setTimeout(() => goNext(), 0)
