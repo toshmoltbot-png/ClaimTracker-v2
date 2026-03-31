@@ -1183,20 +1183,54 @@ async function fetchUrlAsBase64(url: string, maxBytes = 4 * 1024 * 1024): Promis
   return { base64, mimeType: 'image/jpeg' }
 }
 
-export async function analyzePhotoRequestBody(data: ClaimData, photo: AIPhoto, options?: { analysisMode?: AnalysisMode; fastMode?: boolean }) {
-  const analysisMode = normalizeAnalysisMode(options?.analysisMode || photo.analysisMode || data.aiAnalysisMode)
-  let base64 = String(photo.imageBase64 || photo.base64 || '')
+async function resolvePhotoBase64(photo: AIPhoto | FileItem): Promise<{ base64: string; mimeType: string }> {
+  let base64 = String((photo as AIPhoto).imageBase64 || (photo as AIPhoto).base64 || '')
     || (typeof photo.dataUrl === 'string' ? dataUrlToBase64(photo.dataUrl) : '')
     || (typeof photo.url === 'string' && photo.url.startsWith('data:') ? dataUrlToBase64(photo.url) : '')
-
-  let resolvedMimeType = photo.mimeType || photo.type || 'image/jpeg'
-
-  // If no base64 yet but we have a remote URL, fetch and convert
+  let mimeType = photo.mimeType || photo.type || 'image/jpeg'
   if (!base64 && typeof photo.url === 'string' && photo.url.startsWith('http')) {
     const fetched = await fetchUrlAsBase64(photo.url)
     base64 = fetched.base64
-    resolvedMimeType = fetched.mimeType
+    mimeType = fetched.mimeType
   }
+  return { base64, mimeType }
+}
+
+export async function analyzePhotoRequestBody(data: ClaimData, photo: AIPhoto, options?: { analysisMode?: AnalysisMode; fastMode?: boolean }) {
+  const analysisMode = normalizeAnalysisMode(options?.analysisMode || photo.analysisMode || data.aiAnalysisMode)
+
+  // Handle stacked photos — resolve all sub-photos into images array
+  if (photo.isStack && Array.isArray(photo.stackPhotos) && photo.stackPhotos.length > 0) {
+    const images: Array<{ imageBase64: string; mimeType: string }> = []
+    for (const sp of photo.stackPhotos) {
+      try {
+        const resolved = await resolvePhotoBase64(sp)
+        if (resolved.base64) images.push({ imageBase64: resolved.base64, mimeType: resolved.mimeType })
+      } catch { /* skip unresolvable photos */ }
+    }
+
+    const payload: Record<string, unknown> = {
+      images,
+      mergeAsOne: true,
+      mimeType: 'image/jpeg',
+      roomName: photo.roomName || '',
+      photoName: photo.name || photo.filename || 'Photo Stack',
+      analysisMode: mapAnalysisModeToBackend(analysisMode),
+      claimType: data.claimType || 'category3_sewage',
+      claimSummary: buildClaimSummary(data),
+      claimContext: {
+        dashboard: data.dashboard,
+        claim: data.claim,
+        rooms: data.rooms.map((room) => ({ id: room.id, name: room.name, notes: room.notes })),
+        policyInsights: data.policyInsights,
+      },
+    }
+    if (options?.fastMode) payload.fastMode = true
+    return applyAnnotationMarkersToPayload(payload, photo)
+  }
+
+  // Single photo
+  const { base64, mimeType: resolvedMimeType } = await resolvePhotoBase64(photo)
 
   const payload: Record<string, unknown> = {
     imageBase64: base64,
