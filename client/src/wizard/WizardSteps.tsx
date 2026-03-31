@@ -1527,7 +1527,9 @@ export function WizardSteps() {
                 {totalAI === 0
                   ? "We'll now scan your photos and identify your damaged items. This may take a few minutes."
                   : allDone
-                    ? `Analysis complete. ${completedAI} photo${completedAI === 1 ? '' : 's'} processed, ${itemsFound} item${itemsFound === 1 ? '' : 's'} identified.`
+                    ? itemsFound === 0
+                      ? `Analysis complete. ${completedAI} photo${completedAI === 1 ? '' : 's'} processed, but 0 items were found. Tap "Re-scan All Photos" to try again.`
+                      : `Analysis complete. ${completedAI} photo${completedAI === 1 ? '' : 's'} processed, ${itemsFound} item${itemsFound === 1 ? '' : 's'} identified.`
                     : analyzingAI > 0
                       ? `Analyzing photo ${completedAI + 1} of ${totalAI}... This may take a few minutes.`
                       : `${totalAI} photo${totalAI === 1 ? '' : 's'} ready for analysis.`}
@@ -1590,8 +1592,21 @@ export function WizardSteps() {
                   Stop Analysis
                 </button>
               )}
+              {allDone && itemsFound === 0 && (
+                <button className="button-secondary" onClick={() => {
+                  // Reset all photos to pending so they can be re-analyzed
+                  updateData((current) => ({
+                    ...current,
+                    aiPhotos: current.aiPhotos.map((p) => ({ ...p, status: 'pending', aiResultId: undefined, notes: '', errorLabel: null, failedRequestId: null })),
+                    aiResults: [],
+                  }))
+                  pushToast('Photos reset — tap Start Analyzing to re-scan.', 'info')
+                }} type="button">
+                  Re-scan All Photos
+                </button>
+              )}
               {allDone && (
-                <button className="button-primary" onClick={nextStep} type="button">
+                <button className={itemsFound > 0 ? "button-primary" : "button-secondary"} onClick={nextStep} type="button">
                   Continue to Review
                 </button>
               )}
