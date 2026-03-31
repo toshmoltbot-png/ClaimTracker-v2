@@ -1138,21 +1138,49 @@ export function buildClaimSummary(data: ClaimData) {
   }
 }
 
-async function fetchUrlAsBase64(url: string): Promise<{ base64: string; mimeType: string }> {
+async function fetchUrlAsBase64(url: string, maxBytes = 4 * 1024 * 1024): Promise<{ base64: string; mimeType: string }> {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
   const blob = await response.blob()
   const mimeType = blob.type || 'image/jpeg'
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      const dataUrl = reader.result as string
-      const base64 = dataUrl.split(',')[1] || ''
-      resolve({ base64, mimeType })
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
+
+  // If small enough, use as-is
+  if (blob.size <= maxBytes) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string
+        const base64 = dataUrl.split(',')[1] || ''
+        resolve({ base64, mimeType })
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  }
+
+  // Large image — compress via canvas
+  const imageBitmap = await createImageBitmap(blob)
+  const maxDim = 2048
+  const ratio = Math.min(1, maxDim / Math.max(imageBitmap.width, imageBitmap.height))
+  const width = Math.max(1, Math.round(imageBitmap.width * ratio))
+  const height = Math.max(1, Math.round(imageBitmap.height * ratio))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas unavailable')
+  ctx.drawImage(imageBitmap, 0, 0, width, height)
+  imageBitmap.close()
+
+  let quality = 0.85
+  let dataUrl = canvas.toDataURL('image/jpeg', quality)
+  while (dataUrl.length * 0.75 > maxBytes && quality > 0.4) {
+    quality -= 0.1
+    dataUrl = canvas.toDataURL('image/jpeg', quality)
+  }
+
+  const base64 = dataUrl.split(',')[1] || ''
+  return { base64, mimeType: 'image/jpeg' }
 }
 
 export async function analyzePhotoRequestBody(data: ClaimData, photo: AIPhoto, options?: { analysisMode?: AnalysisMode; fastMode?: boolean }) {
