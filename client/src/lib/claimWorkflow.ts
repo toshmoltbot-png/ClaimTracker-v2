@@ -1139,7 +1139,11 @@ export function buildClaimSummary(data: ClaimData) {
 }
 
 async function fetchUrlAsBase64(url: string, maxBytes = 4 * 1024 * 1024): Promise<{ base64: string; mimeType: string }> {
-  const response = await fetch(url)
+  // Use server-side proxy for Firebase Storage URLs to bypass CORS
+  const fetchUrl = url.startsWith('https://firebasestorage.googleapis.com/')
+    ? `/api/storage-proxy?url=${encodeURIComponent(url)}`
+    : url
+  const response = await fetch(fetchUrl)
   if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
   const blob = await response.blob()
   const mimeType = blob.type || 'image/jpeg'
