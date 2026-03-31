@@ -275,7 +275,7 @@ function normalizeStringList(values: unknown) {
 }
 
 function getDetectedItemLabel(item: AIDetectedItem) {
-  return String(item.label || item.name || 'Unnamed item').trim() || 'Unnamed item'
+  return String(item.label || item.itemName || item.name || 'Unnamed item').trim() || 'Unnamed item'
 }
 
 function countItemPhotos(item: ContentItem) {
@@ -1257,8 +1257,9 @@ export async function analyzePhotoVisionWithRetry(
 }
 
 export function parseStrictAIResult(payload: Record<string, unknown>): AIResultRecord {
-  const detectedItems = Array.isArray(payload.detectedItems)
-    ? payload.detectedItems.map((item) => ({
+  const rawItems = payload.detectedItems || payload.items
+  const detectedItems = Array.isArray(rawItems)
+    ? rawItems.map((item) => ({
         ...((item as AIDetectedItem) || {}),
         label: getDetectedItemLabel((item as AIDetectedItem) || {}),
         quantity: Math.max(1, parseNumber((item as AIDetectedItem)?.quantity) || 1),
