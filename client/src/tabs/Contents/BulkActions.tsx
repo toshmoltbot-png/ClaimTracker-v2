@@ -1,14 +1,11 @@
-import { CONTENT_CATEGORIES } from '@/lib/claimWorkflow'
-
 interface BulkActionsProps {
   selectedCount: number
   allVisibleSelected: boolean
   onSelectAll: () => void
   onDeselectAll: () => void
-  onSetCategory: (category: string) => void
   onSetContaminated: (value: boolean) => void
   onSetDisposition: (value: string) => void
-  onMarkCardboardDiscard: () => void
+  onDeleteSelected: () => void
 }
 
 export function BulkActions({
@@ -16,48 +13,44 @@ export function BulkActions({
   allVisibleSelected,
   onSelectAll,
   onDeselectAll,
-  onSetCategory,
   onSetContaminated,
   onSetDisposition,
-  onMarkCardboardDiscard,
+  onDeleteSelected,
 }: BulkActionsProps) {
+  if (!selectedCount) return null
+
   return (
-    <section className="panel px-5 py-5">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-sky-300">Bulk Actions</p>
-          <p className="mt-2 text-sm text-slate-400">{selectedCount} item{selectedCount === 1 ? '' : 's'} selected</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="button-secondary" onClick={allVisibleSelected ? onDeselectAll : onSelectAll} type="button">
+    <section className="fixed inset-x-0 bottom-0 z-40 border-t border-[color:var(--border)] bg-slate-950/90 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-white">
+            {selectedCount} selected
+          </p>
+          <button
+            className="button-secondary px-3 py-1.5 text-xs"
+            onClick={allVisibleSelected ? onDeselectAll : onSelectAll}
+            type="button"
+          >
             {allVisibleSelected ? 'Deselect All' : 'Select All'}
           </button>
-          <button className="button-secondary" disabled={!selectedCount} onClick={() => onSetContaminated(true)} type="button">
-            Mark Contaminated
-          </button>
-          <button className="button-secondary" disabled={!selectedCount} onClick={() => onSetContaminated(false)} type="button">
-            Clear Contamination
-          </button>
-          <button className="button-secondary" disabled={!selectedCount} onClick={() => onSetDisposition('discarded')} type="button">
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => onSetDisposition('discarded')} type="button">
             Set Discarded
           </button>
-          <button className="button-secondary" disabled={!selectedCount} onClick={() => onSetDisposition('inspected')} type="button">
+          <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => onSetDisposition('inspected')} type="button">
             Set Inspected
           </button>
-          <button className="button-secondary" disabled={!selectedCount} onClick={onMarkCardboardDiscard} type="button">
-            Cardboard to Discard
+          <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => onSetContaminated(true)} type="button">
+            Mark Contaminated
           </button>
-          <label className="min-w-48">
-            <span className="sr-only">Bulk category</span>
-            <select className="field py-2.5" defaultValue="" onChange={(event) => event.target.value && onSetCategory(event.target.value)}>
-              <option value="">Set category…</option>
-              {CONTENT_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
+          <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => onSetContaminated(false)} type="button">
+            Clear Contamination
+          </button>
+          <button className="button-secondary px-3 py-1.5 text-xs" onClick={onDeleteSelected} type="button">
+            Delete Selected
+          </button>
         </div>
       </div>
     </section>

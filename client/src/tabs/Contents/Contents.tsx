@@ -14,12 +14,18 @@ import {
 } from '@/lib/claimWorkflow'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
-import type { ContentItem as ContentItemType } from '@/types/claim'
+import type { AIPhoto, ContentItem as ContentItemType } from '@/types/claim'
 import { BulkActions } from '@/tabs/Contents/BulkActions'
-import { ContentItem } from '@/tabs/Contents/ContentItem'
 import { ContentModal } from '@/tabs/Contents/ContentModal'
 import { ContentsSummary } from '@/tabs/Contents/ContentsSummary'
 import { EnrichModal } from '@/tabs/Contents/EnrichModal'
+
+function getItemPhotoUrl(item: ContentItemType, aiPhotos: AIPhoto[]): string | null {
+  const ep = (item.evidencePhotos || [])[0]
+  if (!ep?.photoId) return null
+  const photo = aiPhotos.find((p) => String(p.id) === String(ep.photoId))
+  return photo?.thumbUrl || photo?.url || photo?.dataUrl || null
+}
 
 const SORT_OPTIONS = [
   { value: 'name-asc', label: 'Name A-Z' },
@@ -51,9 +57,40 @@ function compareItems(a: ContentItemType, b: ContentItemType, sort: string) {
   }
 }
 
-function MobileContentCard({ item, selected, onSelect, onEdit, onDelete, onEnrich }: {
+function getInitials(item: ContentItemType) {
+  const text = String(item.category || item.itemName || 'Item').trim()
+  const parts = text.split(/\s+/).filter(Boolean)
+  if (!parts.length) return 'I'
+  const first = parts[0]?.[0] || 'I'
+  const second = parts.length > 1 ? parts[1]?.[0] : parts[0]?.[1]
+  return `${first}${second || ''}`.toUpperCase()
+}
+
+function StatusPill({ tone, children }: { tone: 'slate' | 'sky' | 'amber' | 'rose'; children: string }) {
+  const classes =
+    tone === 'sky'
+      ? 'bg-sky-400/15 text-sky-200'
+      : tone === 'amber'
+        ? 'bg-amber-400/15 text-amber-200'
+        : tone === 'rose'
+          ? 'bg-rose-400/15 text-rose-200'
+          : 'bg-slate-900/80 text-slate-200'
+
+  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${classes}`}>{children}</span>
+}
+
+function ContentCard({
+  item,
+  selected,
+  photoUrl,
+  onSelect,
+  onEdit,
+  onDelete,
+  onEnrich,
+}: {
   item: ContentItemType
   selected: boolean
+  photoUrl: string | null
   onSelect: (checked: boolean) => void
   onEdit: () => void
   onDelete: () => void
@@ -61,34 +98,76 @@ function MobileContentCard({ item, selected, onSelect, onEdit, onDelete, onEnric
 }) {
   const disposition = normalizeDisposition(item.disposition) || 'open'
   const isEnriched = Boolean(item.enrichment?.revised || item.enriched)
+  const showDisposition = disposition === 'discarded' || disposition === 'inspected'
+  const roomLabel = item.room || item.location || 'Unassigned'
+  const categoryLabel = item.category || 'Other'
 
   return (
-    <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 p-4">
-      <div className="flex items-start gap-3">
-        <input checked={selected} className="mt-1" onChange={(e) => onSelect(e.target.checked)} type="checkbox" />
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-white truncate">{item.itemName || 'Unnamed item'}</p>
-          <p className="mt-1 text-xs text-slate-400">{item.room || item.location || 'Unassigned'} · {item.category || 'Other'}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-white">{formatCurrency(getItemTotalValue(item))}</span>
-            <span className="rounded-full bg-slate-900/80 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-200">{disposition}</span>
-            {isEnriched ? <span className="rounded-full bg-sky-400/15 px-2 py-0.5 text-[11px] font-semibold text-sky-200">Enriched</span> : null}
-            {item.contaminated ? <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-200">Contaminated</span> : null}
+    <div className="relative rounded-2xl border border-[color:var(--border)] bg-slate-950/40 p-4">
+      <div className="absolute right-3 top-3">
+        <input
+          aria-label="Select item"
+          checked={selected}
+          className="h-4 w-4"
+          onChange={(e) => onSelect(e.target.checked)}
+          type="checkbox"
+        />
+      </div>
+
+      <div className="flex gap-3">
+        <div className="h-16 w-16 flex-none overflow-hidden rounded-xl bg-slate-900/80">
+          {photoUrl ? (
+            <img alt="" className="h-full w-full object-cover" loading="lazy" src={photoUrl} />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-300">
+              {getInitials(item)}
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-white">{item.itemName || 'Unnamed item'}</p>
+              <p className="mt-1 truncate text-xs text-slate-400">
+                {roomLabel} · {categoryLabel}
+              </p>
+            </div>
+            <p className="text-base font-semibold text-white">{formatCurrency(getItemTotalValue(item))}</p>
           </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {showDisposition ? <StatusPill tone={disposition === 'discarded' ? 'rose' : 'slate'}>{disposition}</StatusPill> : null}
+            {isEnriched ? <StatusPill tone="sky">Enriched</StatusPill> : null}
+            {item.contaminated ? <StatusPill tone="amber">Contaminated</StatusPill> : null}
+          </div>
+
+          {item.replacementLink ? (
+            <a
+              className="mt-2 inline-block text-xs text-sky-300 hover:text-sky-200"
+              href={item.replacementLink}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Replacement link
+            </a>
+          ) : null}
         </div>
       </div>
-      <div className="mt-3 flex gap-2">
-        <button className="button-secondary flex-1 py-2 text-xs" onClick={onEnrich} type="button">{isEnriched ? 'Re-Enrich' : 'Enrich'}</button>
-        <button className="button-secondary flex-1 py-2 text-xs" onClick={onEdit} type="button">Edit</button>
-        <button className="button-secondary py-2 px-3 text-xs" onClick={onDelete} type="button">✕</button>
+
+      <div className="mt-4 flex items-center gap-2">
+        <button className="button-secondary flex-1 py-2 text-xs" onClick={onEdit} type="button">
+          Edit
+        </button>
+        <button className="button-secondary flex-1 py-2 text-xs" onClick={onEnrich} type="button">
+          {isEnriched ? 'Re-Enrich' : 'Enrich'}
+        </button>
+        <button aria-label="Delete" className="button-secondary px-3 py-2 text-xs" onClick={onDelete} type="button">
+          ✕
+        </button>
       </div>
     </div>
   )
-}
-
-function isCardboardItem(item: ContentItemType) {
-  const text = `${item.itemName || ''} ${item.category || ''}`.toLowerCase()
-  return /cardboard|box|boxes|carton/.test(text)
 }
 
 export function Contents() {
@@ -105,15 +184,17 @@ export function Contents() {
   const [page, setPage] = useState(0)
   const PAGE_SIZE = 100
 
+  const aiPhotos = useMemo(() => (data.aiPhotos || []) as AIPhoto[], [data.aiPhotos])
   const allItems = useMemo(() => (data.contents || []).filter((item) => item.source !== 'receipt'), [data.contents])
   const includedItems = useMemo(() => allItems.filter((item) => item.includedInClaim !== false), [allItems])
-  const excludedCount = allItems.length - includedItems.length
   const filteredItems = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return allItems
       .filter((item) => {
         if (!needle) return true
-        return [item.itemName, item.room, item.location, item.category, item.aiJustification].some((value) => String(value || '').toLowerCase().includes(needle))
+        return [item.itemName, item.room, item.location, item.category, item.aiJustification].some((value) =>
+          String(value || '').toLowerCase().includes(needle),
+        )
       })
       .sort((a, b) => compareItems(a, b, sort))
   }, [allItems, search, sort])
@@ -123,7 +204,6 @@ export function Contents() {
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id))
   const enrichTarget = useMemo(() => allItems.find((item) => item.id === enrichTargetId) || null, [allItems, enrichTargetId])
   const totalValue = useMemo(() => includedItems.reduce((sum, item) => sum + getItemTotalValue(item), 0), [includedItems])
-  const enrichedCount = useMemo(() => includedItems.filter((item) => item.enrichment?.revised || item.enriched).length, [includedItems])
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
   const paginatedItems = useMemo(() => {
     if (filteredItems.length <= PAGE_SIZE) return filteredItems
@@ -171,50 +251,66 @@ export function Contents() {
     )
   }
 
+  function handleDeleteSelected() {
+    if (!selectedIds.length) return
+    updateData((current) => ({
+      ...current,
+      contents: current.contents.filter((item) => !selectedSet.has(item.id)),
+    }))
+    setSelectedIds([])
+    pushToast('Selected items deleted.', 'info')
+  }
+
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${selectedIds.length ? 'pb-28' : ''}`}>
       <section className="panel-elevated flex flex-col gap-4 px-6 py-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-sky-300">Contents</p>
-          <h2 className="mt-3 text-2xl font-semibold text-white">Claim inventory and pricing support</h2>
+          <h2 className="text-2xl font-semibold text-white">Your Items</h2>
           <p className="mt-2 text-sm leading-7 text-slate-400">
-            {allItems.length} item{allItems.length === 1 ? '' : 's'} tracked · {formatCurrency(totalValue)} included in claim
+            {allItems.length} item{allItems.length === 1 ? '' : 's'} · {formatCurrency(totalValue)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button className="button-secondary" onClick={() => void handleBatchEnrich(false)} type="button">
-            Enrich Unenriched
-          </button>
-          <button className="button-secondary" onClick={() => void handleBatchEnrich(true)} type="button">
-            Justify All Prices
-          </button>
-          <button
-            className="button-secondary"
-            onClick={() => {
-              try {
-                generateContentsChecklistPDF(data, 'download')
-                pushToast('Contents checklist PDF downloaded.', 'success')
-              } catch (error) {
-                pushToast(error instanceof Error ? error.message : 'PDF generation failed.', 'error')
-              }
-            }}
-            type="button"
-          >
-            Download Checklist
-          </button>
-          <button
-            className="button-secondary"
-            onClick={() => {
-              try {
-                generateContentsChecklistPDF(data, 'print')
-              } catch (error) {
-                pushToast(error instanceof Error ? error.message : 'Print preparation failed.', 'error')
-              }
-            }}
-            type="button"
-          >
-            Print Checklist
-          </button>
+
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <details className="relative">
+            <summary className="button-secondary list-none">More Actions</summary>
+            <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[color:var(--border)] bg-slate-950 p-2 shadow-xl">
+              <button className="button-secondary w-full justify-start px-3 py-2 text-xs" onClick={() => void handleBatchEnrich(false)} type="button">
+                Enrich Unenriched
+              </button>
+              <button className="button-secondary mt-2 w-full justify-start px-3 py-2 text-xs" onClick={() => void handleBatchEnrich(true)} type="button">
+                Justify All Prices
+              </button>
+              <button
+                className="button-secondary mt-2 w-full justify-start px-3 py-2 text-xs"
+                onClick={() => {
+                  try {
+                    generateContentsChecklistPDF(data, 'download')
+                    pushToast('Contents checklist PDF downloaded.', 'success')
+                  } catch (error) {
+                    pushToast(error instanceof Error ? error.message : 'PDF generation failed.', 'error')
+                  }
+                }}
+                type="button"
+              >
+                Download Checklist
+              </button>
+              <button
+                className="button-secondary mt-2 w-full justify-start px-3 py-2 text-xs"
+                onClick={() => {
+                  try {
+                    generateContentsChecklistPDF(data, 'print')
+                  } catch (error) {
+                    pushToast(error instanceof Error ? error.message : 'Print preparation failed.', 'error')
+                  }
+                }}
+                type="button"
+              >
+                Print Checklist
+              </button>
+            </div>
+          </details>
+
           <button
             className="button-primary"
             onClick={() => {
@@ -228,20 +324,13 @@ export function Contents() {
         </div>
       </section>
 
-      <ContentsSummary enrichedCount={enrichedCount} excludedCount={excludedCount} totalItems={includedItems.length} totalValue={totalValue} />
+      <ContentsSummary totalItems={includedItems.length} totalValue={totalValue} />
 
       <BulkActions
         allVisibleSelected={allVisibleSelected}
+        onDeleteSelected={handleDeleteSelected}
         onDeselectAll={() => setSelectedIds([])}
-        onMarkCardboardDiscard={() => {
-          patchItems((item) => (isCardboardItem(item) ? { ...item, disposition: 'discarded' } : item))
-          pushToast('Cardboard items marked discarded where matched.', 'success')
-        }}
         onSelectAll={() => setSelectedIds(visibleIds)}
-        onSetCategory={(category) => {
-          patchItems((item) => ({ ...item, category }))
-          pushToast(`Updated category to ${category}.`, 'success')
-        }}
         onSetContaminated={(value) => {
           patchItems((item) => ({ ...item, contaminated: value }))
           pushToast(value ? 'Selected items marked contaminated.' : 'Contamination cleared for selected items.', 'success')
@@ -256,7 +345,15 @@ export function Contents() {
       <section className="panel px-5 py-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-1 flex-col gap-4 sm:flex-row">
-            <input className="field" onChange={(event) => { setSearch(event.target.value); setPage(0) }} placeholder="Search name, room, category, or rationale" value={search} />
+            <input
+              className="field"
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setPage(0)
+              }}
+              placeholder="Search name, room, category, or rationale"
+              value={search}
+            />
             <select className="field max-w-56" onChange={(event) => setSort(event.target.value)} value={sort}>
               {SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -265,86 +362,52 @@ export function Contents() {
               ))}
             </select>
           </div>
-          <p className="text-sm text-slate-400">{filteredItems.length} visible row{filteredItems.length === 1 ? '' : 's'}</p>
+          <p className="text-sm text-slate-400">{filteredItems.length} visible item{filteredItems.length === 1 ? '' : 's'}</p>
         </div>
 
-        {/* Mobile card view */}
-        <div className="mt-5 space-y-3 md:hidden">
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {paginatedItems.length ? (
             paginatedItems.map((item) => (
-              <MobileContentCard
+              <ContentCard
                 item={item}
                 key={item.id}
                 onDelete={() => setDeleteTarget(item)}
-                onEdit={() => { setEditingItem(item); setIsModalOpen(true) }}
+                onEdit={() => {
+                  setEditingItem(item)
+                  setIsModalOpen(true)
+                }}
                 onEnrich={() => setEnrichTargetId(item.id)}
                 onSelect={(checked) =>
                   setSelectedIds((current) => (checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id)))
                 }
+                photoUrl={getItemPhotoUrl(item, aiPhotos)}
                 selected={selectedSet.has(item.id)}
               />
             ))
           ) : (
-            <div className="py-10 text-center text-sm text-slate-400">No contents items match the current search.</div>
+            <div className="col-span-full py-10 text-center text-sm text-slate-400">No contents items match the current search.</div>
           )}
         </div>
 
-        {/* Desktop table view */}
-        <div className="mt-5 hidden overflow-x-auto md:block">
-          <table className="min-w-full border-separate border-spacing-0">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-[0.2em] text-slate-400">
-                <th className="px-4 pb-3">Select</th>
-                <th className="px-4 pb-3">Name</th>
-                <th className="px-4 pb-3">Room</th>
-                <th className="px-4 pb-3">Category</th>
-                <th className="px-4 pb-3">Qty</th>
-                <th className="px-4 pb-3">Unit Price</th>
-                <th className="px-4 pb-3">Total</th>
-                <th className="px-4 pb-3">Disposition</th>
-                <th className="px-4 pb-3">Status</th>
-                <th className="px-4 pb-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedItems.length ? (
-                paginatedItems.map((item) => (
-                  <ContentItem
-                    item={item}
-                    key={item.id}
-                    onDelete={() => setDeleteTarget(item)}
-                    onEdit={() => {
-                      setEditingItem(item)
-                      setIsModalOpen(true)
-                    }}
-                    onEnrich={() => setEnrichTargetId(item.id)}
-                    onSelect={(checked) =>
-                      setSelectedIds((current) => (checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id)))
-                    }
-                    selected={selectedSet.has(item.id)}
-                  />
-                ))
-              ) : (
-                <tr>
-                  <td className="px-4 py-10 text-center text-sm text-slate-400" colSpan={10}>
-                    No contents items match the current search.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination for large lists */}
         {totalPages > 1 ? (
           <div className="mt-4 flex items-center justify-center gap-3">
-            <button className="button-secondary px-3 py-1.5 text-xs" disabled={page === 0} onClick={() => setPage((p) => p - 1)} type="button">
+            <button
+              className="button-secondary px-3 py-1.5 text-xs"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+              type="button"
+            >
               ← Previous
             </button>
             <span className="text-sm text-slate-400">
               Page {page + 1} of {totalPages}
             </span>
-            <button className="button-secondary px-3 py-1.5 text-xs" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)} type="button">
+            <button
+              className="button-secondary px-3 py-1.5 text-xs"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+              type="button"
+            >
               Next →
             </button>
           </div>
@@ -363,7 +426,9 @@ export function Contents() {
             }
             const index = current.contents.findIndex((entry) => entry.id === normalized.id)
             const contents =
-              index >= 0 ? [...current.contents.slice(0, index), normalized, ...current.contents.slice(index + 1)] : [...current.contents, normalized]
+              index >= 0
+                ? [...current.contents.slice(0, index), normalized, ...current.contents.slice(index + 1)]
+                : [...current.contents, normalized]
             return { ...current, contents }
           })
           setIsModalOpen(false)
@@ -438,7 +503,7 @@ export function Contents() {
         title="Delete item"
       >
         <p className="text-sm leading-7 text-slate-300">
-          Delete <span className="font-semibold text-white">{deleteTarget?.itemName || 'this item'}</span>? This removes it from the inventory table.
+          Delete <span className="font-semibold text-white">{deleteTarget?.itemName || 'this item'}</span>? This removes it from the inventory.
         </p>
       </Modal>
     </div>
