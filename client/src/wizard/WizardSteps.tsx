@@ -1516,7 +1516,7 @@ export function WizardSteps() {
         const analyzingAI = aiPhotos.filter((p) => (p as Record<string, unknown>).status === 'analyzing').length
         const pendingAI = totalAI - completedAI - failedAI - analyzingAI
         const progressAI = totalAI > 0 ? Math.round((completedAI / totalAI) * 100) : 0
-        const allDone = totalAI > 0 && pendingAI === 0 && analyzingAI === 0
+        const allDone = totalAI > 0 && pendingAI === 0 && analyzingAI === 0 && failedAI === 0
         const itemsFound = (data.contents || []).length
 
         return (
