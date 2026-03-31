@@ -1668,17 +1668,7 @@ export function WizardSteps() {
               </p>
             </div>
 
-            {/* Active group controls */}
-            {activeGroupId && (
-              <div className={`flex items-center gap-3 rounded-xl border-2 ${GROUP_COLORS[activeGroupColor >= 0 ? activeGroupColor % GROUP_COLORS.length : 0].border} bg-slate-950/60 px-4 py-3`}>
-                <div className={`h-4 w-4 rounded-full ${GROUP_COLORS[activeGroupColor >= 0 ? activeGroupColor % GROUP_COLORS.length : 0].bg}`} />
-                <span className="text-sm text-white">Editing {GROUP_COLORS[activeGroupColor >= 0 ? activeGroupColor % GROUP_COLORS.length : 0].label} group — tap photos to add/remove</span>
-                <div className="ml-auto flex gap-2">
-                  <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => handleUngroupAll(activeGroupId)} type="button">Ungroup all</button>
-                  <button className="button-primary px-3 py-1.5 text-xs" onClick={() => setActiveGroupId(null)} type="button">Done Editing</button>
-                </div>
-              </div>
-            )}
+            {/* Active group controls — sticky at bottom */}
 
             {/* Group legend */}
             {stacks.length > 0 && !activeGroupId && (
@@ -1699,13 +1689,6 @@ export function WizardSteps() {
                   )
                 })}
               </div>
-            )}
-
-            {/* Create group button */}
-            {!activeGroupId && groupSelected.size >= 2 && (
-              <button className="button-primary px-4 py-2 text-sm" onClick={handleCreateGroup} type="button">
-                Create Group ({groupSelected.size} photos)
-              </button>
             )}
 
             {/* Flat photo grid — ALL photos always visible */}
@@ -1751,6 +1734,28 @@ export function WizardSteps() {
                 )
               })}
             </div>
+
+            {/* Floating action bar — sticky at bottom of scroll area */}
+            {(groupSelected.size >= 2 || activeGroupId) && (
+              <div className="sticky bottom-0 z-10 -mx-5 border-t border-[color:var(--border)] bg-slate-900/95 px-5 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
+                {activeGroupId ? (
+                  <div className="flex items-center gap-3">
+                    <div className={`h-4 w-4 rounded-full flex-shrink-0 ${GROUP_COLORS[activeGroupColor >= 0 ? activeGroupColor % GROUP_COLORS.length : 0].bg}`} />
+                    <span className="text-sm text-white flex-1">Editing {GROUP_COLORS[activeGroupColor >= 0 ? activeGroupColor % GROUP_COLORS.length : 0].label} group — tap photos to add/remove</span>
+                    <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => handleUngroupAll(activeGroupId)} type="button">Ungroup</button>
+                    <button className="button-primary px-3 py-1.5 text-xs" onClick={() => setActiveGroupId(null)} type="button">Done</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-300">{groupSelected.size} photos selected</span>
+                    <div className="flex gap-2">
+                      <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => setGroupSelected(new Set())} type="button">Cancel</button>
+                      <button className="button-primary px-4 py-2 text-sm" onClick={handleCreateGroup} type="button">Create Group</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex gap-3 pt-2">
