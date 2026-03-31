@@ -112,6 +112,8 @@ export function WizardSteps() {
   const [aleSkipped, setAleSkipped] = useState<Set<string>>(new Set())
   const [aiRunning, setAiRunning] = useState(false)
   const aiAbortRef = useRef<AbortController | null>(null)
+  const [groupSelected, setGroupSelected] = useState<Set<string>>(new Set())
+  const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set())
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`Processing ${file.name}...`)
@@ -1514,8 +1516,6 @@ export function WizardSteps() {
         // Group Photos step — let users stack multiple photos of the same item
         const ungroupedPhotos = (data.aiPhotos || []).filter((p) => !p.isStack)
         const stacks = (data.aiPhotos || []).filter((p) => p.isStack)
-        const [groupSelected, setGroupSelected] = useState<Set<string>>(new Set())
-        const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set())
 
         function toggleGroupSelect(photoId: string) {
           setGroupSelected((prev) => {
