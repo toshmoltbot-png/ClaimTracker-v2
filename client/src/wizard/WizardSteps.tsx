@@ -114,6 +114,8 @@ export function WizardSteps() {
   const aiAbortRef = useRef<AbortController | null>(null)
   const [groupSelected, setGroupSelected] = useState<Set<string>>(new Set())
   const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set())
+  const [dragPhotoId, setDragPhotoId] = useState<string | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`Processing ${file.name}...`)
@@ -1513,16 +1515,87 @@ export function WizardSteps() {
         )
       }
       case 11: {
-        // Group Photos step — let users stack multiple photos of the same item
-        const ungroupedPhotos = (data.aiPhotos || []).filter((p) => !p.isStack)
-        const stacks = (data.aiPhotos || []).filter((p) => p.isStack)
+        // Group Photos — drag to stack, tap to select, inline stack thumbnails
+        const allPhotos = data.aiPhotos || []
+        const ungroupedPhotos = allPhotos.filter((p) => !p.isStack)
+        const stacks = allPhotos.filter((p) => p.isStack)
 
-        function toggleGroupSelect(photoId: string) {
-          setGroupSelected((prev) => {
-            const next = new Set(prev)
-            if (next.has(photoId)) next.delete(photoId)
-            else next.add(photoId)
-            return next
+        function handleDragStart(photoId: string) { setDragPhotoId(photoId) }
+        function handleDragEnd() { setDragPhotoId(null); setDropTargetId(null) }
+
+        function handleDropOnPhoto(targetId: string) {
+          setDropTargetId(null)
+          if (!dragPhotoId || dragPhotoId === targetId) return
+          const dragPhoto = ungroupedPhotos.find((p) => String(p.id) === dragPhotoId)
+          const targetPhoto = ungroupedPhotos.find((p) => String(p.id) === targetId)
+          if (!dragPhoto || !targetPhoto) return
+          const stack = createPhotoStack([targetPhoto, dragPhoto], data.aiAnalysisMode || 'ITEM_VIEW')
+          updateData((current) => ({
+            ...current,
+            aiPhotos: [stack, ...(current.aiPhotos || []).filter((p) => String(p.id) !== dragPhotoId && String(p.id) !== targetId)],
+          }))
+          setDragPhotoId(null)
+          setGroupSelected(new Set())
+        }
+
+        function handleDropOnStack(stackId: string) {
+          setDropTargetId(null)
+          if (!dragPhotoId) return
+          const dragPhoto = ungroupedPhotos.find((p) => String(p.id) === dragPhotoId)
+          if (!dragPhoto) return
+          updateData((current) => ({
+            ...current,
+            aiPhotos: (current.aiPhotos || [])
+              .filter((p) => String(p.id) !== dragPhotoId)
+              .map((p) => {
+                if (String(p.id) !== stackId || !p.isStack) return p
+                return {
+                  ...p,
+                  name: `Photo Stack (${(p.stackPhotos || []).length + 1})`,
+                  stackPhotos: [...(p.stackPhotos || []), dragPhoto],
+                  stackPhotoIds: [...(p.stackPhotoIds || []), String(dragPhoto.id || '')],
+                  stackPhotoNames: [...(p.stackPhotoNames || []), String(dragPhoto.name || dragPhoto.filename || 'Photo')],
+                }
+              }),
+          }))
+          setDragPhotoId(null)
+        }
+
+        function handleRemoveFromStack(stackId: string, photoId: string) {
+          updateData((current) => {
+            const stack = (current.aiPhotos || []).find((p) => String(p.id) === stackId)
+            if (!stack?.isStack || !stack.stackPhotos) return current
+            const removed = stack.stackPhotos.find((sp) => String(sp.id) === photoId)
+            const remaining = stack.stackPhotos.filter((sp) => String(sp.id) !== photoId)
+            if (!removed) return current
+            if (remaining.length <= 1) {
+              // Dissolve stack — put all photos back as individuals
+              return { ...current, aiPhotos: [...remaining, removed, ...(current.aiPhotos || []).filter((p) => String(p.id) !== stackId)] }
+            }
+            return {
+              ...current,
+              aiPhotos: [
+                removed,
+                ...(current.aiPhotos || []).map((p) => {
+                  if (String(p.id) !== stackId) return p
+                  return {
+                    ...p,
+                    name: `Photo Stack (${remaining.length})`,
+                    stackPhotos: remaining,
+                    stackPhotoIds: remaining.map((sp) => String(sp.id || '')),
+                    stackPhotoNames: remaining.map((sp) => String(sp.name || sp.filename || 'Photo')),
+                  }
+                }),
+              ],
+            }
+          })
+        }
+
+        function handleUnstack(stackId: string) {
+          updateData((current) => {
+            const target = (current.aiPhotos || []).find((p) => String(p.id) === stackId)
+            if (!target?.isStack || !target.stackPhotos) return current
+            return { ...current, aiPhotos: [...target.stackPhotos, ...(current.aiPhotos || []).filter((p) => String(p.id) !== stackId)] }
           })
         }
 
@@ -1537,20 +1610,7 @@ export function WizardSteps() {
           setGroupSelected(new Set())
         }
 
-        function handleUnstack(stackId: string) {
-          updateData((current) => {
-            const target = (current.aiPhotos || []).find((p) => String(p.id) === stackId)
-            if (!target?.isStack || !target.stackPhotos) return current
-            return {
-              ...current,
-              aiPhotos: [...target.stackPhotos, ...(current.aiPhotos || []).filter((p) => String(p.id) !== stackId)],
-            }
-          })
-          setExpandedStacks((prev) => { const n = new Set(prev); n.delete(stackId); return n })
-        }
-
-        const totalPhotos = (data.aiPhotos || []).length
-        if (totalPhotos === 0) {
+        if (allPhotos.length === 0) {
           return (
             <div className="space-y-5">
               <h3 className="text-lg font-semibold text-white">Group your photos</h3>
@@ -1565,47 +1625,59 @@ export function WizardSteps() {
             <div>
               <h3 className="text-lg font-semibold text-white">Group your photos</h3>
               <p className="mt-2 text-sm leading-7 text-slate-300">
-                If you took multiple photos of the same item, select them and tap "Group Selected" so each item is only counted once.
+                Drag a photo onto another to group them as the same item. You can also select multiple and tap "Group Selected". Each group will be scanned as one item.
               </p>
             </div>
 
-            {/* Existing stacks */}
+            {/* Stacks — always show thumbnails inline */}
             {stacks.length > 0 && (
               <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-sky-300">Grouped</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-sky-300">Grouped items ({stacks.length})</p>
                 {stacks.map((stack) => {
                   const sid = String(stack.id)
-                  const expanded = expandedStacks.has(sid)
+                  const isDropTarget = dropTargetId === sid
                   return (
-                    <div key={sid} className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 p-4">
-                      <div className="flex items-center justify-between">
-                        <button className="text-sm font-medium text-white" onClick={() => setExpandedStacks((prev) => {
-                          const n = new Set(prev); if (n.has(sid)) n.delete(sid); else n.add(sid); return n
-                        })} type="button">
-                          {stack.name || 'Photo Stack'} ({(stack.stackPhotos || []).length} photos) {expanded ? '▾' : '▸'}
-                        </button>
-                        <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => handleUnstack(sid)} type="button">Ungroup</button>
+                    <div
+                      key={sid}
+                      className={`rounded-2xl border-2 p-4 transition-colors ${isDropTarget ? 'border-sky-400 bg-sky-400/10' : 'border-[color:var(--border)] bg-slate-950/40'}`}
+                      onDragOver={(e) => { e.preventDefault(); setDropTargetId(sid) }}
+                      onDragLeave={() => setDropTargetId(null)}
+                      onDrop={(e) => { e.preventDefault(); handleDropOnStack(sid) }}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-sm font-medium text-white">{stack.name || 'Photo Stack'}</p>
+                        <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => handleUnstack(sid)} type="button">Ungroup all</button>
                       </div>
-                      {expanded && (
-                        <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
-                          {(stack.stackPhotos || []).map((sp) => (
-                            <div key={String(sp.id)} className="rounded-lg overflow-hidden">
-                              {(sp.url || sp.thumbUrl || sp.dataUrl) ? (
-                                <img src={sp.url || sp.thumbUrl || sp.dataUrl || ''} alt={sp.name || 'Photo'} className="h-16 w-full object-cover" />
+                      <div className="flex flex-wrap gap-2">
+                        {(stack.stackPhotos || []).map((sp) => {
+                          const spSrc = sp.url || sp.thumbUrl || sp.dataUrl
+                          return (
+                            <div key={String(sp.id)} className="relative group">
+                              {spSrc ? (
+                                <img src={spSrc} alt={sp.name || 'Photo'} className="h-16 w-16 rounded-lg object-cover" />
                               ) : (
-                                <div className="flex h-16 items-center justify-center bg-slate-800 text-xs text-slate-500">{sp.name || 'Photo'}</div>
+                                <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-800 text-[10px] text-slate-500">{sp.name || 'Photo'}</div>
                               )}
+                              <button
+                                className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white group-hover:flex"
+                                onClick={() => handleRemoveFromStack(sid, String(sp.id))}
+                                type="button"
+                              >✕</button>
+                              <p className="mt-0.5 max-w-[64px] truncate text-[9px] text-slate-500">{sp.name || 'Photo'}</p>
                             </div>
-                          ))}
+                          )
+                        })}
+                        <div className="flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-slate-600 text-xs text-slate-500">
+                          drop here
                         </div>
-                      )}
+                      </div>
                     </div>
                   )
                 })}
               </div>
             )}
 
-            {/* Ungrouped photos */}
+            {/* Ungrouped photos — draggable + selectable */}
             {ungroupedPhotos.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -1620,16 +1692,33 @@ export function WizardSteps() {
                   {ungroupedPhotos.map((photo) => {
                     const pid = String(photo.id)
                     const selected = groupSelected.has(pid)
+                    const isOver = dropTargetId === pid && dragPhotoId !== pid
                     const src = photo.url || photo.thumbUrl || photo.dataUrl
                     return (
-                      <button
+                      <div
                         key={pid}
-                        className={`relative rounded-xl overflow-hidden border-2 transition-colors ${selected ? 'border-sky-400 ring-2 ring-sky-400/30' : 'border-transparent'}`}
-                        onClick={() => toggleGroupSelect(pid)}
-                        type="button"
+                        draggable
+                        onDragStart={() => handleDragStart(pid)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => { e.preventDefault(); if (dragPhotoId !== pid) setDropTargetId(pid) }}
+                        onDragLeave={() => setDropTargetId(null)}
+                        onDrop={(e) => { e.preventDefault(); handleDropOnPhoto(pid) }}
+                        className={`relative cursor-grab rounded-xl overflow-hidden border-2 transition-all ${
+                          isOver ? 'border-sky-400 ring-2 ring-sky-400/30 scale-105' :
+                          selected ? 'border-sky-400' :
+                          'border-transparent'
+                        }`}
+                        onClick={() => {
+                          if (dragPhotoId) return
+                          setGroupSelected((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(pid)) next.delete(pid); else next.add(pid)
+                            return next
+                          })
+                        }}
                       >
                         {src ? (
-                          <img src={src} alt={photo.name || 'Photo'} className="h-24 w-full object-cover" />
+                          <img src={src} alt={photo.name || 'Photo'} className="h-24 w-full object-cover pointer-events-none" />
                         ) : (
                           <div className="flex h-24 items-center justify-center bg-slate-800 text-xs text-slate-500">{photo.name || 'Photo'}</div>
                         )}
@@ -1637,7 +1726,7 @@ export function WizardSteps() {
                           <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-sky-400 text-[10px] font-bold text-white">✓</div>
                         )}
                         <p className="truncate px-1 py-1 text-[10px] text-slate-400">{photo.name || photo.filename || 'Photo'}</p>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
