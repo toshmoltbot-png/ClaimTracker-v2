@@ -21,6 +21,7 @@ import {
   uploadAndAnalyzeContractorReport,
   getExpenseEntriesByCategory,
   removeExpenseEntry,
+  createPhotoStack,
 } from '@/lib/claimWorkflow'
 import { compressImageToDataUrl, dataUrlToBase64, readFileAsDataUrl } from '@/lib/utils'
 import { fmtUSDate } from '@/lib/dates'
@@ -30,7 +31,7 @@ import { extractPolicyText, parsePolicyFields } from '@/lib/policyParser'
 import { uploadFile } from '@/lib/firebase'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
-import type { AnalysisMode, ExpenseEntry, FileItem, Receipt, Room } from '@/types/claim'
+import type { AIPhoto, AnalysisMode, ExpenseEntry, FileItem, Receipt, Room } from '@/types/claim'
 import { FloorPlanCanvas } from '@/tabs/FloorPlan/FloorPlanCanvas'
 import { ReceiptModal } from '@/tabs/Receipts/ReceiptModal'
 import { ExpenseModal } from '@/tabs/Expenses/ExpenseModal'
@@ -47,6 +48,7 @@ const steps = [
   'Receipts',
   'Contractors',
   'Expenses',
+  'Group Photos',
   'AI Launch',
   'Review',
   'Done',
@@ -1509,6 +1511,148 @@ export function WizardSteps() {
         )
       }
       case 11: {
+        // Group Photos step — let users stack multiple photos of the same item
+        const ungroupedPhotos = (data.aiPhotos || []).filter((p) => !p.isStack)
+        const stacks = (data.aiPhotos || []).filter((p) => p.isStack)
+        const [groupSelected, setGroupSelected] = useState<Set<string>>(new Set())
+        const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set())
+
+        function toggleGroupSelect(photoId: string) {
+          setGroupSelected((prev) => {
+            const next = new Set(prev)
+            if (next.has(photoId)) next.delete(photoId)
+            else next.add(photoId)
+            return next
+          })
+        }
+
+        function handleGroupSelected() {
+          const selected = ungroupedPhotos.filter((p) => groupSelected.has(String(p.id)))
+          if (selected.length < 2) return
+          const stack = createPhotoStack(selected, data.aiAnalysisMode || 'ITEM_VIEW')
+          updateData((current) => ({
+            ...current,
+            aiPhotos: [stack, ...(current.aiPhotos || []).filter((p) => !groupSelected.has(String(p.id)))],
+          }))
+          setGroupSelected(new Set())
+        }
+
+        function handleUnstack(stackId: string) {
+          updateData((current) => {
+            const target = (current.aiPhotos || []).find((p) => String(p.id) === stackId)
+            if (!target?.isStack || !target.stackPhotos) return current
+            return {
+              ...current,
+              aiPhotos: [...target.stackPhotos, ...(current.aiPhotos || []).filter((p) => String(p.id) !== stackId)],
+            }
+          })
+          setExpandedStacks((prev) => { const n = new Set(prev); n.delete(stackId); return n })
+        }
+
+        const totalPhotos = (data.aiPhotos || []).length
+        if (totalPhotos === 0) {
+          return (
+            <div className="space-y-5">
+              <h3 className="text-lg font-semibold text-white">Group your photos</h3>
+              <p className="text-sm text-slate-400">No photos uploaded yet. Go back to add item photos first.</p>
+              <button className="button-secondary" onClick={previousStep} type="button">Go Back</button>
+            </div>
+          )
+        }
+
+        return (
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Group your photos</h3>
+              <p className="mt-2 text-sm leading-7 text-slate-300">
+                If you took multiple photos of the same item, select them and tap "Group Selected" so each item is only counted once.
+              </p>
+            </div>
+
+            {/* Existing stacks */}
+            {stacks.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-sky-300">Grouped</p>
+                {stacks.map((stack) => {
+                  const sid = String(stack.id)
+                  const expanded = expandedStacks.has(sid)
+                  return (
+                    <div key={sid} className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 p-4">
+                      <div className="flex items-center justify-between">
+                        <button className="text-sm font-medium text-white" onClick={() => setExpandedStacks((prev) => {
+                          const n = new Set(prev); if (n.has(sid)) n.delete(sid); else n.add(sid); return n
+                        })} type="button">
+                          {stack.name || 'Photo Stack'} ({(stack.stackPhotos || []).length} photos) {expanded ? '▾' : '▸'}
+                        </button>
+                        <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => handleUnstack(sid)} type="button">Ungroup</button>
+                      </div>
+                      {expanded && (
+                        <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                          {(stack.stackPhotos || []).map((sp) => (
+                            <div key={String(sp.id)} className="rounded-lg overflow-hidden">
+                              {(sp.url || sp.thumbUrl || sp.dataUrl) ? (
+                                <img src={sp.url || sp.thumbUrl || sp.dataUrl || ''} alt={sp.name || 'Photo'} className="h-16 w-full object-cover" />
+                              ) : (
+                                <div className="flex h-16 items-center justify-center bg-slate-800 text-xs text-slate-500">{sp.name || 'Photo'}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Ungrouped photos */}
+            {ungroupedPhotos.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Individual photos ({ungroupedPhotos.length})</p>
+                  {groupSelected.size >= 2 && (
+                    <button className="button-primary px-4 py-2 text-sm" onClick={handleGroupSelected} type="button">
+                      Group Selected ({groupSelected.size})
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+                  {ungroupedPhotos.map((photo) => {
+                    const pid = String(photo.id)
+                    const selected = groupSelected.has(pid)
+                    const src = photo.url || photo.thumbUrl || photo.dataUrl
+                    return (
+                      <button
+                        key={pid}
+                        className={`relative rounded-xl overflow-hidden border-2 transition-colors ${selected ? 'border-sky-400 ring-2 ring-sky-400/30' : 'border-transparent'}`}
+                        onClick={() => toggleGroupSelect(pid)}
+                        type="button"
+                      >
+                        {src ? (
+                          <img src={src} alt={photo.name || 'Photo'} className="h-24 w-full object-cover" />
+                        ) : (
+                          <div className="flex h-24 items-center justify-center bg-slate-800 text-xs text-slate-500">{photo.name || 'Photo'}</div>
+                        )}
+                        {selected && (
+                          <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-sky-400 text-[10px] font-bold text-white">✓</div>
+                        )}
+                        <p className="truncate px-1 py-1 text-[10px] text-slate-400">{photo.name || photo.filename || 'Photo'}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3 pt-2">
+              <button className="button-primary" onClick={nextStep} type="button">Continue</button>
+              <button className="button-secondary" onClick={nextStep} type="button">Skip — each photo is a different item</button>
+            </div>
+          </div>
+        )
+      }
+      case 12: {
         const aiPhotos = data.aiPhotos || []
         const totalAI = aiPhotos.length
         const completedAI = aiPhotos.filter((p) => (p as Record<string, unknown>).status === 'complete').length
@@ -1614,7 +1758,7 @@ export function WizardSteps() {
           </div>
         )
       }
-      case 12: {
+      case 13: {
         const itemCount = (data.contents || []).filter((i) => i.includedInClaim !== false).length
         const totalValue = (data.contents || []).reduce((sum, i) => sum + Number(i.replacementCost || 0), 0)
         return (
@@ -1639,7 +1783,7 @@ export function WizardSteps() {
                 <button className="button-primary" onClick={() => {
                   setWizardOpen(false)
                   setActiveTab('contents')
-                  useUIStore.getState().setWizardReturnStep(12)
+                  useUIStore.getState().setWizardReturnStep(13)
                 }} type="button">Review and Edit Items</button>
                 <button className="button-secondary" onClick={nextStep} type="button">Looks Good, Continue</button>
               </>
@@ -1652,7 +1796,7 @@ export function WizardSteps() {
           </div>
         )
       }
-      case 13:
+      case 14:
         return (
           <div className="space-y-5">
             <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/10 px-5 py-5">

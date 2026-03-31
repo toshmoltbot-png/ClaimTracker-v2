@@ -4,6 +4,7 @@ import {
   applyEnrichmentResponse,
   applyJustificationResponse,
   deduplicateDraftItemsBySourcePhotos,
+  findDuplicateGroups,
   formatCurrency,
   generateContentsChecklistPDF,
   getItemTotalValue,
@@ -12,12 +13,14 @@ import {
   undoEnrichment,
   updateContentLineTotal,
 } from '@/lib/claimWorkflow'
+import type { DuplicateGroup } from '@/lib/claimWorkflow'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import type { AIPhoto, ContentItem as ContentItemType } from '@/types/claim'
 import { BulkActions } from '@/tabs/Contents/BulkActions'
 import { ContentModal } from '@/tabs/Contents/ContentModal'
 import { ContentsSummary } from '@/tabs/Contents/ContentsSummary'
+import { DuplicateMergeModal } from '@/tabs/Contents/DuplicateMergeModal'
 import { EnrichModal } from '@/tabs/Contents/EnrichModal'
 
 function getItemPhotoUrl(item: ContentItemType, aiPhotos: AIPhoto[]): string | null {
@@ -182,6 +185,8 @@ export function Contents() {
   const [deleteTarget, setDeleteTarget] = useState<ContentItemType | null>(null)
   const [enrichTargetId, setEnrichTargetId] = useState<string | null>(null)
   const [page, setPage] = useState(0)
+  const [dupGroups, setDupGroups] = useState<DuplicateGroup[]>([])
+  const [dupModalOpen, setDupModalOpen] = useState(false)
   const PAGE_SIZE = 100
 
   const aiPhotos = useMemo(() => (data.aiPhotos || []) as AIPhoto[], [data.aiPhotos])
@@ -251,6 +256,49 @@ export function Contents() {
     )
   }
 
+  function handleFindDuplicates() {
+    const groups = findDuplicateGroups(allItems)
+    if (!groups.length) {
+      pushToast('No likely duplicates found.', 'info')
+      return
+    }
+    setDupGroups(groups)
+    setDupModalOpen(true)
+  }
+
+  function handleMergeItems(keepId: string, removeIds: string[]) {
+    updateData((current) => {
+      const keepItem = current.contents.find((i) => i.id === keepId)
+      if (!keepItem) return current
+      const removeItems = current.contents.filter((i) => removeIds.includes(i.id))
+      const combinedPhotos = [
+        ...(keepItem.evidencePhotos || []),
+        ...removeItems.flatMap((i) => i.evidencePhotos || []),
+      ]
+      const seen = new Set<string>()
+      const uniquePhotos = combinedPhotos.filter((p) => {
+        const key = String(p.photoId || p.photoName || '')
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      return {
+        ...current,
+        contents: current.contents
+          .filter((i) => !removeIds.includes(i.id))
+          .map((i) => (i.id === keepId ? { ...i, evidencePhotos: uniquePhotos } : i)),
+      }
+    })
+    // Remove the merged group from the modal
+    setDupGroups((prev) => prev.filter((g) => !g.items.some((i) => removeIds.includes(i.id))))
+    pushToast(`Merged ${removeIds.length} duplicate${removeIds.length === 1 ? '' : 's'}.`, 'success')
+  }
+
+  function handleDismissGroup(groupIndex: number) {
+    setDupGroups((prev) => prev.filter((_, i) => i !== groupIndex))
+    if (dupGroups.length <= 1) setDupModalOpen(false)
+  }
+
   function handleDeleteSelected() {
     if (!selectedIds.length) return
     updateData((current) => ({
@@ -272,6 +320,11 @@ export function Contents() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-3">
+          {allItems.length > 1 && (
+            <button className="button-secondary" onClick={handleFindDuplicates} type="button">
+              Find Duplicates
+            </button>
+          )}
           <details className="relative">
             <summary className="button-secondary list-none">More Actions</summary>
             <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[color:var(--border)] bg-slate-950 p-2 shadow-xl">
@@ -506,6 +559,15 @@ export function Contents() {
           Delete <span className="font-semibold text-white">{deleteTarget?.itemName || 'this item'}</span>? This removes it from the inventory.
         </p>
       </Modal>
+
+      <DuplicateMergeModal
+        open={dupModalOpen}
+        groups={dupGroups}
+        aiPhotos={data.aiPhotos || []}
+        onMerge={handleMergeItems}
+        onDismissGroup={handleDismissGroup}
+        onClose={() => { setDupModalOpen(false); setDupGroups([]) }}
+      />
     </div>
   )
 }

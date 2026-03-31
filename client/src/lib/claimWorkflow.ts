@@ -1814,6 +1814,87 @@ export function deduplicateDraftItemsBySourcePhotos(items: ContentItem[]) {
   return deduplicateItemsBySourcePhotos(items)
 }
 
+export function createPhotoStack(photos: AIPhoto[], defaultMode: AnalysisMode): AIPhoto {
+  const base = photos[0]
+  const sameRoom = photos.every((photo) => String(photo.roomId || '') === String(base.roomId || ''))
+  const sameMode = photos.every((photo) => photo.analysisMode === base.analysisMode)
+  return {
+    id: crypto.randomUUID(),
+    isStack: true,
+    name: `Photo Stack (${photos.length})`,
+    stackPhotos: photos.map((photo) => ({ ...photo })),
+    stackPhotoIds: photos.map((photo) => String(photo.id || '')),
+    stackPhotoNames: photos.map((photo) => String(photo.name || photo.filename || 'Photo')),
+    roomId: sameRoom ? base.roomId : null,
+    roomName: sameRoom ? base.roomName : 'Mixed',
+    uploadedAt: new Date().toISOString(),
+    status: 'pending',
+    analysisMode: sameMode ? (base.analysisMode || defaultMode) : defaultMode,
+    source: 'stack',
+    collapsed: true,
+  }
+}
+
+// Fuzzy duplicate detection for contents
+const STOP_WORDS = new Set(['the', 'a', 'an', 'of', 'for', 'with', 'and', 'in', 'on', 'to', 'by', 'at', 'or'])
+
+function tokenize(text: string): Set<string> {
+  return new Set(
+    text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 1 && !STOP_WORDS.has(w))
+  )
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 0
+  let intersection = 0
+  for (const word of a) { if (b.has(word)) intersection++ }
+  return intersection / (a.size + b.size - intersection)
+}
+
+export interface DuplicateGroup {
+  items: ContentItem[]
+  similarity: number
+}
+
+export function findDuplicateGroups(items: ContentItem[], threshold = 0.5): DuplicateGroup[] {
+  const tokenized = items.map(item => ({
+    item,
+    tokens: tokenize(String(item.itemName || '')),
+    room: String(item.room || item.location || '').toLowerCase().trim(),
+    category: String(item.category || '').toLowerCase().trim(),
+  }))
+
+  const used = new Set<string>()
+  const groups: DuplicateGroup[] = []
+
+  for (let i = 0; i < tokenized.length; i++) {
+    if (used.has(tokenized[i].item.id)) continue
+    const group: ContentItem[] = [tokenized[i].item]
+    let bestSim = 0
+
+    for (let j = i + 1; j < tokenized.length; j++) {
+      if (used.has(tokenized[j].item.id)) continue
+      const nameSim = jaccardSimilarity(tokenized[i].tokens, tokenized[j].tokens)
+      // Boost if same room or same category
+      const roomBoost = tokenized[i].room && tokenized[i].room === tokenized[j].room ? 0.15 : 0
+      const catBoost = tokenized[i].category && tokenized[i].category === tokenized[j].category ? 0.1 : 0
+      const score = nameSim + roomBoost + catBoost
+      if (score >= threshold) {
+        group.push(tokenized[j].item)
+        used.add(tokenized[j].item.id)
+        bestSim = Math.max(bestSim, score)
+      }
+    }
+
+    if (group.length > 1) {
+      used.add(tokenized[i].item.id)
+      groups.push({ items: group, similarity: bestSim })
+    }
+  }
+
+  return groups
+}
+
 export async function submitEnrichItem(item: ContentItem, options?: { justifyMode?: boolean }) {
   const justifyMode = options?.justifyMode === true
   const baseline = {

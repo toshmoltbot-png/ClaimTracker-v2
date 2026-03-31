@@ -5,6 +5,7 @@ import {
   analyzePhotoVisionWithRetry,
   autoImportPhotosToAIBuilder,
   buildClaimSummary,
+  createPhotoStack,
   mapPrescreenTypeToAnalysisMode,
   parseStrictAIResult,
   upsertDraftContentFromAI,
@@ -18,26 +19,7 @@ import { AnalysisResults } from '@/tabs/AIBuilder/AnalysisResults'
 import { PhotoDropZone } from '@/tabs/AIBuilder/PhotoDropZone'
 import { PhotoStack } from '@/tabs/AIBuilder/PhotoStack'
 
-function createPhotoStack(photos: AIPhoto[], defaultMode: AnalysisMode): AIPhoto {
-  const base = photos[0]
-  const sameRoom = photos.every((photo) => String(photo.roomId || '') === String(base.roomId || ''))
-  const sameMode = photos.every((photo) => photo.analysisMode === base.analysisMode)
-  return {
-    id: crypto.randomUUID(),
-    isStack: true,
-    name: `Photo Stack (${photos.length})`,
-    stackPhotos: photos.map((photo) => ({ ...photo })),
-    stackPhotoIds: photos.map((photo) => String(photo.id || '')),
-    stackPhotoNames: photos.map((photo) => String(photo.name || photo.filename || 'Photo')),
-    roomId: sameRoom ? base.roomId : null,
-    roomName: sameRoom ? base.roomName : 'Mixed',
-    uploadedAt: new Date().toISOString(),
-    status: 'pending',
-    analysisMode: sameMode ? (base.analysisMode || defaultMode) : defaultMode,
-    source: 'stack',
-    collapsed: true,
-  }
-}
+// createPhotoStack imported from @/lib/claimWorkflow
 
 function pickPhotoPreview(photo: AIPhoto) {
   return String(photo.dataUrl || photo.url || photo.thumbUrl || photo.base64 || '')
