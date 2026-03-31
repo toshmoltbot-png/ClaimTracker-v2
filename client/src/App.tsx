@@ -12,6 +12,7 @@ import { useClaimStore, setupClaimAutosave } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import { CLAIM_TABS, type ClaimTabId } from '@/types/claim'
 import { OnboardingWizard } from '@/wizard/OnboardingWizard'
+import { WizardReturnBanner } from '@/components/shared/WizardReturnBanner'
 import { getStoredOnboardingStep, shouldShowOnboarding } from '@/lib/claimWorkflow'
 
 // Lazy-loaded tab components for code splitting
@@ -115,6 +116,7 @@ function MainShell() {
           <MobileQuickActions />
         </div>
         <OnboardingWizard />
+        <WizardReturnBanner />
         <PrePrintModal />
         <PDFProgress />
         <ConfirmDialog />

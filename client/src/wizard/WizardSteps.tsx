@@ -1636,7 +1636,11 @@ export function WizardSteps() {
                     <p className="mt-1 text-xs text-slate-400">Price-verified</p>
                   </div>
                 </div>
-                <button className="button-primary" onClick={() => { setWizardOpen(false); setActiveTab('contents') }} type="button">Review and Edit Items</button>
+                <button className="button-primary" onClick={() => {
+                  setWizardOpen(false)
+                  setActiveTab('contents')
+                  useUIStore.getState().setWizardReturnStep(12)
+                }} type="button">Review and Edit Items</button>
                 <button className="button-secondary" onClick={nextStep} type="button">Looks Good, Continue</button>
               </>
             ) : (

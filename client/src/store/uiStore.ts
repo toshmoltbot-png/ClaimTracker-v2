@@ -24,6 +24,7 @@ interface UIState {
   modals: Record<string, boolean>
   toasts: ToastMessage[]
   wizard: WizardState
+  wizardReturnStep: number | null
   setActiveTab: (tab: ClaimTabId) => void
   setSaveStatus: (status: SaveStatus) => void
   setOffline: (offline: boolean) => void
@@ -34,6 +35,7 @@ interface UIState {
   setWizardOpen: (open: boolean) => void
   setWizardStep: (step: number) => void
   openWizard: (step?: number, forced?: boolean) => void
+  setWizardReturnStep: (step: number | null) => void
   isPremiumUnlocked: () => boolean
   setPremiumUnlocked: (value: boolean) => void
 }
@@ -54,6 +56,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   modals: {},
   toasts: [],
   wizard: { open: false, step: 1, forced: false },
+  wizardReturnStep: null,
   setActiveTab: (activeTab) => set({ activeTab }),
   setSaveStatus: (saveStatus) => set({ saveStatus }),
   setOffline: (isOffline) => set({ isOffline }),
@@ -66,6 +69,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) })),
   setWizardOpen: (open) => set((state) => ({ wizard: { ...state.wizard, open } })),
   setWizardStep: (step) => set((state) => ({ wizard: { ...state.wizard, step } })),
+  setWizardReturnStep: (step) => set({ wizardReturnStep: step }),
   openWizard: (step, forced = false) =>
     set((state) => ({
       wizard: {
