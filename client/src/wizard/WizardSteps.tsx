@@ -1568,8 +1568,37 @@ export function WizardSteps() {
             return
           }
 
+          // If we have selected ungrouped photos and tapped a GROUPED photo → add all selected to that group
+          if (groupInfo && groupSelected.size > 0) {
+            const scrollTop = contentRef.current?.scrollTop ?? 0
+            const selectedIds = new Set(groupSelected)
+            updateData((current) => {
+              const photosToAdd = (current.aiPhotos || []).filter((p) => !p.isStack && selectedIds.has(String(p.id)))
+              if (!photosToAdd.length) return current
+              return {
+                ...current,
+                aiPhotos: (current.aiPhotos || [])
+                  .filter((p) => !selectedIds.has(String(p.id)))
+                  .map((p) => {
+                    if (String(p.id) !== groupInfo.stackId || !p.isStack) return p
+                    const newPhotos = [...(p.stackPhotos || []), ...photosToAdd]
+                    return {
+                      ...p,
+                      name: `Group (${newPhotos.length} photos)`,
+                      stackPhotos: newPhotos,
+                      stackPhotoIds: newPhotos.map((sp) => String(sp.id || '')),
+                      stackPhotoNames: newPhotos.map((sp) => String(sp.name || sp.filename || 'Photo')),
+                    }
+                  }),
+              }
+            })
+            setGroupSelected(new Set())
+            requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
+            return
+          }
+
           if (groupInfo) {
-            // Tapped a grouped photo — activate that group for editing
+            // Tapped a grouped photo with nothing selected — activate that group for editing
             setActiveGroupId(groupInfo.stackId)
             return
           }
@@ -1680,8 +1709,8 @@ export function WizardSteps() {
               <h3 className="text-lg font-semibold text-white">Group your photos</h3>
               <p className="mt-2 text-sm leading-7 text-slate-300">
                 {activeGroupId
-                  ? 'Tap photos to add or remove them from this group. Tap "Done Editing" when finished.'
-                  : 'Tap a colored photo to edit that group. Select 2+ ungrouped photos and tap "Create Group" to make a new group.'}
+                  ? 'Tap photos to add or remove them from this group. Tap "Done" when finished.'
+                  : 'Select 2+ photos and tap "Create Group". To add to an existing group, select the photo(s) first, then tap any photo already in that group.'}
               </p>
             </div>
 
