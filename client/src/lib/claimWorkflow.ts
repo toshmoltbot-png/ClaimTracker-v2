@@ -1138,15 +1138,41 @@ export function buildClaimSummary(data: ClaimData) {
   }
 }
 
-export function analyzePhotoRequestBody(data: ClaimData, photo: AIPhoto, options?: { analysisMode?: AnalysisMode; fastMode?: boolean }) {
+async function fetchUrlAsBase64(url: string): Promise<{ base64: string; mimeType: string }> {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
+  const blob = await response.blob()
+  const mimeType = blob.type || 'image/jpeg'
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string
+      const base64 = dataUrl.split(',')[1] || ''
+      resolve({ base64, mimeType })
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+export async function analyzePhotoRequestBody(data: ClaimData, photo: AIPhoto, options?: { analysisMode?: AnalysisMode; fastMode?: boolean }) {
   const analysisMode = normalizeAnalysisMode(options?.analysisMode || photo.analysisMode || data.aiAnalysisMode)
-  const base64 = String(photo.imageBase64 || photo.base64 || '')
+  let base64 = String(photo.imageBase64 || photo.base64 || '')
     || (typeof photo.dataUrl === 'string' ? dataUrlToBase64(photo.dataUrl) : '')
     || (typeof photo.url === 'string' && photo.url.startsWith('data:') ? dataUrlToBase64(photo.url) : '')
 
+  let resolvedMimeType = photo.mimeType || photo.type || 'image/jpeg'
+
+  // If no base64 yet but we have a remote URL, fetch and convert
+  if (!base64 && typeof photo.url === 'string' && photo.url.startsWith('http')) {
+    const fetched = await fetchUrlAsBase64(photo.url)
+    base64 = fetched.base64
+    resolvedMimeType = fetched.mimeType
+  }
+
   const payload: Record<string, unknown> = {
     imageBase64: base64,
-    mimeType: photo.mimeType || photo.type || 'image/jpeg',
+    mimeType: resolvedMimeType,
     roomName: photo.roomName || '',
     photoName: photo.name || photo.filename || 'Photo',
     analysisMode: mapAnalysisModeToBackend(analysisMode),
@@ -1183,7 +1209,7 @@ export async function analyzePhotoVisionWithRetry(
 
   while (attempt <= maxRetries) {
     try {
-      const response = await apiClient.analyzePhoto(analyzePhotoRequestBody(data, photo, options))
+      const response = await apiClient.analyzePhoto(await analyzePhotoRequestBody(data, photo, options))
       return response
     } catch (error) {
       if (options?.signal?.aborted) throw error
