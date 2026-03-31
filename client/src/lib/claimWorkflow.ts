@@ -1282,7 +1282,9 @@ export async function analyzePhotoVisionWithRetry(
       if (!status || !ANALYZE_RETRYABLE_STATUS.has(status) || attempt >= maxRetries) {
         throw error
       }
-      await new Promise((resolve) => window.setTimeout(resolve, 750 * (attempt + 1)))
+      // Longer backoff for 429s (rate limit) vs other retryable errors
+      const backoffMs = status === 429 ? 3000 * (attempt + 1) : 750 * (attempt + 1)
+      await new Promise((resolve) => window.setTimeout(resolve, backoffMs))
       attempt += 1
     }
   }
