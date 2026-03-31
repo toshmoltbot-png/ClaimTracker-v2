@@ -3,16 +3,19 @@ import { PhotoUploader } from '@/components/shared/PhotoUploader'
 import {
   CLAIM_TYPE_OPTIONS,
   ONBOARDING_TIP_PREFIX,
+  analyzePhotoVisionWithRetry,
   autoImportPhotosToAIBuilder,
   buildPhotoLibraryEntries,
   createExpenseEntryDraft,
   ensureFloorPlanSettings,
   getStoredOnboardingStep,
   markOnboardingComplete,
+  parseStrictAIResult,
   setStoredOnboardingStep,
   syncClaimReceipts,
   formatCurrency,
   getExpensesTotal,
+  upsertDraftContentFromAI,
   upsertExpenseEntry,
   updateRoomDimensions,
   uploadAndAnalyzeContractorReport,
@@ -105,6 +108,8 @@ export function WizardSteps() {
   const [expenseSubStep, setExpenseSubStep] = useState(1)
   const [aleCardIndex, setAleCardIndex] = useState(0)
   const [aleSkipped, setAleSkipped] = useState<Set<string>>(new Set())
+  const [aiRunning, setAiRunning] = useState(false)
+  const aiAbortRef = useRef<AbortController | null>(null)
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`Processing ${file.name}...`)
@@ -359,15 +364,94 @@ export function WizardSteps() {
     setExpenseModalOpen(true)
   }
 
-  function launchAI() {
+  async function launchAI() {
+    // Import photos if needed
     updateData((current) => ({
       ...current,
       aiPhotos: current.aiPhotos.length ? current.aiPhotos : autoImportPhotosToAIBuilder(current),
       aiNeedsUpdate: true,
     }))
-    setActiveTab('ai-builder')
-    window.location.hash = '#ai-builder'
-    pushToast('AI Builder is ready for analysis.', 'success')
+
+    // Small delay so state flushes before we read photos
+    await new Promise((r) => setTimeout(r, 100))
+
+    const photos = useClaimStore.getState().data.aiPhotos
+    const pending = photos.filter((p) => !p.status || p.status === 'pending' || p.status === 'failed')
+    if (!pending.length) {
+      pushToast('No photos to analyze.', 'info')
+      return
+    }
+
+    setAiRunning(true)
+    const controller = new AbortController()
+    aiAbortRef.current = controller
+
+    for (const photo of pending) {
+      if (controller.signal.aborted) break
+      const photoId = String(photo.id || '')
+
+      // Mark as analyzing
+      updateData((current) => ({
+        ...current,
+        aiPhotos: current.aiPhotos.map((entry) =>
+          String(entry.id) === photoId ? { ...entry, status: 'analyzing', notes: '' } : entry
+        ),
+      }))
+
+      try {
+        const payload = await analyzePhotoVisionWithRetry(
+          useClaimStore.getState().data,
+          photo,
+          { signal: controller.signal, fastMode: true }
+        )
+        const parsed = parseStrictAIResult(payload)
+        updateData((current) => {
+          const resultId = crypto.randomUUID()
+          const nextResults = [
+            ...current.aiResults.filter((r) => String(r.photoId || '') !== photoId),
+            { id: resultId, photoId: photo.id, createdAt: new Date().toISOString(), ...parsed },
+          ]
+          const { contents, followUpTasks } = upsertDraftContentFromAI(current, photo, parsed)
+          return {
+            ...current,
+            aiResults: nextResults,
+            contents,
+            followUpTasks,
+            aiNeedsUpdate: false,
+            aiPhotos: current.aiPhotos.map((entry) =>
+              String(entry.id) === photoId
+                ? {
+                    ...entry,
+                    status: 'complete',
+                    aiResultId: resultId,
+                    notes: '',
+                    errorLabel: null,
+                    failedRequestId: null,
+                    lastAnalyzedAt: new Date().toISOString(),
+                    lastAnalyzedMode: entry.analysisMode || current.aiAnalysisMode,
+                  }
+                : entry
+            ),
+          }
+        })
+      } catch (error) {
+        if (controller.signal.aborted) break
+        updateData((current) => ({
+          ...current,
+          aiPhotos: current.aiPhotos.map((entry) =>
+            String(entry.id) === photoId
+              ? { ...entry, status: 'failed', notes: error instanceof Error ? error.message : 'Analysis failed.' }
+              : entry
+          ),
+        }))
+      }
+    }
+
+    aiAbortRef.current = null
+    setAiRunning(false)
+    if (!controller.signal.aborted) {
+      pushToast('Photo analysis complete.', 'success')
+    }
   }
 
   function finish(target: 'maximizer' | 'contents') {
@@ -1490,16 +1574,19 @@ export function WizardSteps() {
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-3">
-              {!allDone && analyzingAI === 0 && (
-                <button className="button-primary" onClick={() => {
-                  updateData((current) => ({
-                    ...current,
-                    aiPhotos: current.aiPhotos.length ? current.aiPhotos : autoImportPhotosToAIBuilder(current),
-                    aiNeedsUpdate: true,
-                  }))
-                  launchAI()
-                }} type="button">
+              {!allDone && !aiRunning && (
+                <button className="button-primary" onClick={() => void launchAI()} type="button">
                   Start Analyzing Photos
+                </button>
+              )}
+              {aiRunning && (
+                <button className="button-secondary" onClick={() => {
+                  aiAbortRef.current?.abort()
+                  aiAbortRef.current = null
+                  setAiRunning(false)
+                  pushToast('Analysis stopped.', 'info')
+                }} type="button">
+                  Stop Analysis
                 </button>
               )}
               {allDone && (
