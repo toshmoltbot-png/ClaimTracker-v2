@@ -1636,7 +1636,8 @@ export function WizardSteps() {
                     <p className="mt-1 text-xs text-slate-400">Price-verified</p>
                   </div>
                 </div>
-                <button className="button-primary" onClick={nextStep} type="button">Review and Edit Items</button>
+                <button className="button-primary" onClick={() => setActiveTab('contents')} type="button">Review and Edit Items</button>
+                <button className="button-secondary" onClick={nextStep} type="button">Looks Good, Continue</button>
               </>
             ) : (
               <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
