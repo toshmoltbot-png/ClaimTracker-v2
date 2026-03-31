@@ -1715,9 +1715,9 @@ export function WizardSteps() {
                     onClick={() => handlePhotoTap(pid)}
                   >
                     {src ? (
-                      <img src={src} alt={photo.name || 'Photo'} className="h-24 w-full object-cover" />
+                      <img src={src} alt={photo.name || 'Photo'} className="h-24 w-full rounded-t-xl bg-slate-900 object-contain" />
                     ) : (
-                      <div className="flex h-24 items-center justify-center bg-slate-800 text-xs text-slate-500">{photo.name || 'Photo'}</div>
+                      <div className="flex h-24 items-center justify-center rounded-t-xl bg-slate-800 text-xs text-slate-500">{photo.name || 'Photo'}</div>
                     )}
                     {/* Group badge */}
                     {isGrouped && c && (
