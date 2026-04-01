@@ -83,8 +83,8 @@ export function Dashboard() {
             </div>
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
-            <button className="button-primary" onClick={() => navigateToTab(setActiveTab, navigate, 'ai-builder')} type="button">
-              AI Builder
+            <button className="button-primary" onClick={() => navigateToTab(setActiveTab, navigate, 'contents')} type="button">
+              Contents
             </button>
             <button className="button-secondary" onClick={() => openModal('prePrint')} type="button">
               Generate Report
@@ -123,7 +123,7 @@ export function Dashboard() {
           value={String(summary.itemCount)}
         />
         <MetricCard
-          hint={`${formatPercent(summary.aiCompletionPercent)} AI complete`}
+          hint={summary.expensesTotal > 0 ? 'Tracked' : 'No expenses yet'}
           label="Expenses"
           progress={summary.expensesTotal > 0 ? 100 : 10}
           value={formatCurrency(summary.expensesTotal)}

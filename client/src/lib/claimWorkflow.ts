@@ -46,12 +46,9 @@ export async function uploadAndAnalyzeContractorReport(file: File) {
   return report
 }
 import { fmtUSDate } from '@/lib/dates'
-import { applyCategory3Rules } from '@/lib/sanitizer'
-import { dataUrlToBase64, upsertById } from '@/lib/utils'
+import { upsertById } from '@/lib/utils'
 import type {
-  AIDetectedItem,
   AIPhoto,
-  AIResultRecord,
   AnalysisMode,
   ClaimData,
   ClaimType,
@@ -144,7 +141,6 @@ export const COMMUNICATION_TYPE_OPTIONS = ['phone', 'email', 'in-person', 'lette
 export const COMMUNICATION_PARTY_OPTIONS = ['adjuster', 'contractor', 'attorney', 'agent', 'insurer', 'landlord', 'other'] as const
 export const PAYMENT_TYPE_OPTIONS = ['advance', 'partial', 'final', 'supplement'] as const
 export const TIMELINE_CATEGORY_OPTIONS = ['Incident', 'Insurance', 'Remediation', 'Repair', 'Legal', 'Other'] as const
-const ANALYZE_RETRYABLE_STATUS = new Set([429, 502, 503, 504])
 
 export interface DashboardSummary {
   roomsCount: number
@@ -162,7 +158,7 @@ export interface NextStepSuggestion {
   title: string
   description: string
   actionLabel: string
-  targetTab: 'dashboard' | 'claim-info' | 'rooms' | 'photo-library' | 'ai-builder' | 'contents'
+  targetTab: 'dashboard' | 'claim-info' | 'rooms' | 'photo-library' | 'contents'
 }
 
 export interface ReadinessCheck {
@@ -223,41 +219,6 @@ export function normalizeDisposition(value: string | null | undefined) {
   return raw
 }
 
-export function normalizeAnalysisMode(mode: unknown, fallback: AnalysisMode = 'ITEM_VIEW'): AnalysisMode {
-  if (mode === 'FOCUS_ITEM') return 'ITEM_VIEW'
-  if (mode === 'ROOM_SCAN') return 'ROOM_VIEW'
-  if (mode === 'ITEM_VIEW' || mode === 'ROOM_VIEW' || mode === 'FOCUSED_VIEW') return mode
-  return fallback
-}
-
-export function analysisModeLabel(mode: unknown) {
-  const normalized = normalizeAnalysisMode(mode)
-  if (normalized === 'ROOM_VIEW') return 'Room View'
-  if (normalized === 'FOCUSED_VIEW') return 'Focused View'
-  return 'Item View'
-}
-
-export function mapAnalysisModeToBackend(mode: unknown) {
-  const normalized = normalizeAnalysisMode(mode)
-  if (normalized === 'ROOM_VIEW') return 'ROOM_SCAN'
-  if (normalized === 'FOCUSED_VIEW') return 'ROOM_SCAN'
-  return 'FOCUS_ITEM'
-}
-
-export function mapAnalysisModeToPrescreenType(mode: unknown) {
-  const normalized = normalizeAnalysisMode(mode)
-  if (normalized === 'ROOM_VIEW') return 'room_scan'
-  if (normalized === 'FOCUSED_VIEW') return 'focused_view'
-  return 'focus_item'
-}
-
-export function mapPrescreenTypeToAnalysisMode(type: unknown): AnalysisMode {
-  const raw = String(type || '').toLowerCase()
-  if (raw === 'room_scan' || raw === 'room_view') return 'ROOM_VIEW'
-  if (raw === 'focused_view' || raw === 'focus_area') return 'FOCUSED_VIEW'
-  return 'ITEM_VIEW'
-}
-
 function parseNumber(value: unknown) {
   const num = Number(value)
   return Number.isFinite(num) ? num : 0
@@ -270,13 +231,7 @@ export function parseMoneyValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function normalizeStringList(values: unknown) {
-  return Array.isArray(values) ? values.map((value) => String(value)).filter(Boolean) : []
-}
 
-function getDetectedItemLabel(item: AIDetectedItem) {
-  return String(item.label || item.itemName || item.name || 'Unnamed item').trim() || 'Unnamed item'
-}
 
 function countItemPhotos(item: ContentItem) {
   return (item.photos || []).length + (item.evidencePhotos || []).length + (item.sourcePhotoName ? 1 : 0)
@@ -1048,15 +1003,15 @@ export function getNextStepSuggestion(data: ClaimData): NextStepSuggestion {
   if (!summary.photoCount) {
     return {
       title: 'Add photo evidence',
-      description: 'Upload room or item photos so AI analysis and documentation have support.',
-      actionLabel: 'Go to AI Builder',
-      targetTab: 'ai-builder',
+      description: 'Upload room or item photos for documentation and support.',
+      actionLabel: 'Go to Photo Library',
+      targetTab: 'photo-library',
     }
   }
   if (!summary.itemCount) {
     return {
       title: 'Start the contents inventory',
-      description: 'Create the first few line items manually or use AI Builder output to seed the list.',
+      description: 'Create the first few line items to seed the inventory.',
       actionLabel: 'Open Contents',
       targetTab: 'contents',
     }
@@ -1138,417 +1093,8 @@ export function buildClaimSummary(data: ClaimData) {
   }
 }
 
-async function fetchUrlAsBase64(url: string, maxBytes = 4 * 1024 * 1024): Promise<{ base64: string; mimeType: string }> {
-  // Use server-side proxy for Firebase Storage URLs to bypass CORS
-  const fetchUrl = url.startsWith('https://firebasestorage.googleapis.com/')
-    ? `/api/storage-proxy?url=${encodeURIComponent(url)}`
-    : url
-  const response = await fetch(fetchUrl)
-  if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`)
-  const blob = await response.blob()
-  const mimeType = blob.type || 'image/jpeg'
-
-  // If small enough, use as-is
-  if (blob.size <= maxBytes) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string
-        const base64 = dataUrl.split(',')[1] || ''
-        resolve({ base64, mimeType })
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-  }
-
-  // Large image — compress via canvas
-  const imageBitmap = await createImageBitmap(blob)
-  const maxDim = 2048
-  const ratio = Math.min(1, maxDim / Math.max(imageBitmap.width, imageBitmap.height))
-  const width = Math.max(1, Math.round(imageBitmap.width * ratio))
-  const height = Math.max(1, Math.round(imageBitmap.height * ratio))
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Canvas unavailable')
-  ctx.drawImage(imageBitmap, 0, 0, width, height)
-  imageBitmap.close()
-
-  let quality = 0.85
-  let dataUrl = canvas.toDataURL('image/jpeg', quality)
-  while (dataUrl.length * 0.75 > maxBytes && quality > 0.4) {
-    quality -= 0.1
-    dataUrl = canvas.toDataURL('image/jpeg', quality)
-  }
-
-  const base64 = dataUrl.split(',')[1] || ''
-  return { base64, mimeType: 'image/jpeg' }
-}
-
-async function resolvePhotoBase64(photo: AIPhoto | FileItem): Promise<{ base64: string; mimeType: string }> {
-  let base64 = String((photo as AIPhoto).imageBase64 || (photo as AIPhoto).base64 || '')
-    || (typeof photo.dataUrl === 'string' ? dataUrlToBase64(photo.dataUrl) : '')
-    || (typeof photo.url === 'string' && photo.url.startsWith('data:') ? dataUrlToBase64(photo.url) : '')
-  let mimeType = photo.mimeType || photo.type || 'image/jpeg'
-  if (!base64 && typeof photo.url === 'string' && photo.url.startsWith('http')) {
-    const fetched = await fetchUrlAsBase64(photo.url)
-    base64 = fetched.base64
-    mimeType = fetched.mimeType
-  }
-  return { base64, mimeType }
-}
-
-export async function analyzePhotoRequestBody(data: ClaimData, photo: AIPhoto, options?: { analysisMode?: AnalysisMode; fastMode?: boolean }) {
-  const analysisMode = normalizeAnalysisMode(options?.analysisMode || photo.analysisMode || data.aiAnalysisMode)
-
-  // Handle stacked photos — resolve all sub-photos into images array
-  if (photo.isStack && Array.isArray(photo.stackPhotos) && photo.stackPhotos.length > 0) {
-    const images: Array<{ imageBase64: string; mimeType: string }> = []
-    for (const sp of photo.stackPhotos) {
-      try {
-        const resolved = await resolvePhotoBase64(sp)
-        if (resolved.base64) images.push({ imageBase64: resolved.base64, mimeType: resolved.mimeType })
-      } catch { /* skip unresolvable photos */ }
-    }
-
-    const payload: Record<string, unknown> = {
-      images,
-      mergeAsOne: true,
-      mimeType: 'image/jpeg',
-      roomName: photo.roomName || '',
-      photoName: photo.name || photo.filename || 'Photo Stack',
-      analysisMode: mapAnalysisModeToBackend(analysisMode),
-      claimType: data.claimType || 'category3_sewage',
-      claimSummary: buildClaimSummary(data),
-      claimContext: {
-        dashboard: data.dashboard,
-        claim: data.claim,
-        rooms: data.rooms.map((room) => ({ id: room.id, name: room.name, notes: room.notes })),
-        policyInsights: data.policyInsights,
-      },
-    }
-    if (options?.fastMode) payload.fastMode = true
-    return applyAnnotationMarkersToPayload(payload, photo)
-  }
-
-  // Single photo
-  const { base64, mimeType: resolvedMimeType } = await resolvePhotoBase64(photo)
-
-  const payload: Record<string, unknown> = {
-    imageBase64: base64,
-    mimeType: resolvedMimeType,
-    roomName: photo.roomName || '',
-    photoName: photo.name || photo.filename || 'Photo',
-    analysisMode: mapAnalysisModeToBackend(analysisMode),
-    claimType: data.claimType || 'category3_sewage',
-    claimSummary: buildClaimSummary(data),
-    claimContext: {
-      dashboard: data.dashboard,
-      claim: data.claim,
-      rooms: data.rooms.map((room) => ({ id: room.id, name: room.name, notes: room.notes })),
-      policyInsights: data.policyInsights,
-    },
-  }
-
-  if (options?.fastMode) payload.fastMode = true
-  return applyAnnotationMarkersToPayload(payload, photo)
-}
-
-export function applyAnnotationMarkersToPayload(payload: Record<string, unknown>, photo: AIPhoto) {
-  const annotations = Array.isArray(photo.annotationMarkers) ? photo.annotationMarkers : []
-  if (annotations.length > 0) {
-    return { ...payload, annotations }
-  }
-  return payload
-}
-
-export async function analyzePhotoVisionWithRetry(
-  data: ClaimData,
-  photo: AIPhoto,
-  options?: { analysisMode?: AnalysisMode; fastMode?: boolean; signal?: AbortSignal; maxRetries?: number },
-) {
-  // 429s get more retries since they're transient rate limits
-  const baseMaxRetries = options?.maxRetries ?? 3
-  let attempt = 0
-  let lastError: unknown
-  let effectiveMaxRetries = baseMaxRetries
-
-  while (attempt <= effectiveMaxRetries) {
-    try {
-      const response = await apiClient.analyzePhoto(await analyzePhotoRequestBody(data, photo, options))
-      return response
-    } catch (error) {
-      if (options?.signal?.aborted) throw error
-      lastError = error
-      const message = error instanceof Error ? error.message : String(error)
-      const statusMatch = message.match(/\b(\d{3})\b/)
-      const status = statusMatch ? Number(statusMatch[1]) : null
-      if (!status || !ANALYZE_RETRYABLE_STATUS.has(status)) {
-        throw error
-      }
-      // Allow up to 6 retries for 429 (rate limit) — these always resolve with patience
-      if (status === 429 && effectiveMaxRetries < 6) {
-        effectiveMaxRetries = 6
-      }
-      if (attempt >= effectiveMaxRetries) {
-        throw error
-      }
-      // Exponential backoff: 429 → 5s/10s/20s/30s/30s/30s, others → 1s/2s/4s
-      const backoffMs = status === 429
-        ? Math.min(30000, 5000 * Math.pow(2, attempt))
-        : Math.min(8000, 1000 * Math.pow(2, attempt))
-      await new Promise((resolve) => window.setTimeout(resolve, backoffMs))
-      attempt += 1
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error('Photo analysis failed.')
-}
-
-export function parseStrictAIResult(payload: Record<string, unknown>): AIResultRecord {
-  const rawItems = payload.detectedItems || payload.items
-  const detectedItems = Array.isArray(rawItems)
-    ? rawItems.map((item) => ({
-        ...((item as AIDetectedItem) || {}),
-        label: getDetectedItemLabel((item as AIDetectedItem) || {}),
-        quantity: Math.max(1, parseNumber((item as AIDetectedItem)?.quantity) || 1),
-        quantityUnit: String((item as AIDetectedItem)?.quantityUnit || 'each'),
-        replacementPrice: parseMoneyValue((item as AIDetectedItem)?.replacementPrice ?? (item as AIDetectedItem)?.estimatedValue),
-        confidence: Number((item as AIDetectedItem)?.confidence || 0),
-      }))
-    : []
-
-  return {
-    sceneSummary: String(payload.sceneSummary || payload.summary || ''),
-    riskFlags: normalizeStringList(payload.riskFlags),
-    followUpRequests: normalizeStringList(payload.followUpRequests),
-    confidenceOverall: Number(payload.confidenceOverall || 0),
-    modelUsed: String(payload.modelUsed || ''),
-    detectedItems,
-  }
-}
-
-export function buildEvidencePhotosFromAIPhoto(photo: AIPhoto) {
-  const sources = photo.isStack && Array.isArray(photo.stackPhotos) && photo.stackPhotos.length ? photo.stackPhotos : [photo]
-  return sources.map((entry) => ({
-    photoId: entry.id,
-    photoName: String(entry.name || entry.filename || 'Photo'),
-  }))
-}
-
-export function mergeEvidencePhotos(existing: Array<{ photoId?: string | number; photoName?: string }> = [], additions: Array<{ photoId?: string | number; photoName?: string }> = []) {
-  const seen = new Map<string, { photoId?: string | number; photoName?: string }>()
-  for (const item of [...existing, ...additions]) {
-    const key = String(item.photoId || item.photoName || '')
-    if (!key || seen.has(key)) continue
-    seen.set(key, item)
-  }
-  return Array.from(seen.values())
-}
-
-export function mergeSourcePhotoNames(...names: Array<string | null | undefined>) {
-  const seen = new Set<string>()
-  for (const entry of names) {
-    for (const value of String(entry || '').split(',')) {
-      const trimmed = value.trim()
-      if (trimmed) seen.add(trimmed)
-    }
-  }
-  return Array.from(seen).join(', ')
-}
-
-function ensureEnhancedContentShape(item: ContentItem): ContentItem {
-  return {
-    quantity: 1,
-    quantityUnit: 'each',
-    evidencePhotos: [],
-    includedInClaim: true,
-    contaminated: false,
-    confidence: 0,
-    ...item,
-  }
-}
-
-export function createFollowUps(data: ClaimData, photo: AIPhoto, parsed: AIResultRecord, createdItemIds: string[]) {
-  const existingKeys = new Set(
-    (data.followUpTasks || []).map((task) => `${String((task as { photoId?: string | number }).photoId || '')}::${String((task as { prompt?: string }).prompt || '')}`),
-  )
-
-  const prompts = [
-    ...((parsed.followUpRequests || []).map((prompt) => ({ prompt, itemId: null })) || []),
-    ...((parsed.detectedItems || [])
-      .filter((item) => {
-        const text = `${item.category || ''} ${item.label || ''}`.toLowerCase()
-        return /electronics|tv|computer|laptop|phone|tablet|router|appliance/.test(text)
-      })
-      .map((item, index) => ({ prompt: `Was ${getDetectedItemLabel(item)} powered on while wet?`, itemId: createdItemIds[index] || null }))),
-  ]
-
-  const nextTasks = [...data.followUpTasks]
-  prompts.forEach(({ prompt, itemId }) => {
-    const key = `${String(photo.id || '')}::${prompt}`
-    if (existingKeys.has(key)) return
-    existingKeys.add(key)
-    nextTasks.push({
-      id: crypto.randomUUID(),
-      claimId: data.dashboard.claimNumber || data.claim.claimNumber || 'default',
-      roomId: photo.roomId || 'unknown',
-      photoId: photo.id || null,
-      itemId,
-      prompt,
-      status: 'open',
-    })
-  })
-
-  return nextTasks
-}
-
-function fuzzyItemMatch(existingName: string, newName: string, existingRoom: string, newRoom: string): boolean {
-  const a = existingName.trim().toLowerCase()
-  const b = newName.trim().toLowerCase()
-  // Exact match
-  if (a === b) return existingRoom === newRoom || !existingRoom || existingRoom === 'unknown'
-  // Substring containment (e.g., "Nest Thermostat" vs "Google Nest Thermostat")
-  if (a.includes(b) || b.includes(a)) {
-    return existingRoom === newRoom || !existingRoom || existingRoom === 'unknown'
-  }
-  // Jaccard token similarity
-  const stopWords = new Set(['the', 'a', 'an', 'of', 'for', 'with', 'and', 'in', 'on', 'to', 'by', 'at', 'or'])
-  const tok = (s: string) => new Set(s.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w)))
-  const ta = tok(a)
-  const tb = tok(b)
-  if (ta.size === 0 && tb.size === 0) return false
-  let intersection = 0
-  for (const w of ta) { if (tb.has(w)) intersection++ }
-  const sim = intersection / (ta.size + tb.size - intersection)
-  // High threshold (0.6) to avoid merging truly different items
-  if (sim >= 0.6) return existingRoom === newRoom || !existingRoom || existingRoom === 'unknown'
-  return false
-}
-
-export function upsertDraftContentFromAI(data: ClaimData, photo: AIPhoto, parsed: AIResultRecord) {
-  const evidencePhotos = buildEvidencePhotosFromAIPhoto(photo)
-  const createdItemIds: string[] = []
-  let contents = [...data.contents]
-
-  for (const detected of parsed.detectedItems || []) {
-    const name = getDetectedItemLabel(detected)
-    const roomName = String(photo.roomName || detected.roomAssignment || 'Unknown')
-    const newRoomNorm = roomName.trim().toLowerCase()
-    const existingIndex = contents.findIndex(
-      (item) => fuzzyItemMatch(
-        String(item.itemName || ''),
-        name,
-        String(item.room || item.location || '').trim().toLowerCase(),
-        newRoomNorm,
-      ),
-    )
-
-    const ruled = applyCategory3Rules(
-      {
-        id: crypto.randomUUID(),
-        itemName: name,
-        category: detected.category,
-        porousness: detected.porousness,
-        disposition: normalizeDisposition(detected.likelyDisposition),
-      },
-      photo,
-      data.claimType,
-    )
-
-    if (existingIndex >= 0) {
-      const existing = ensureEnhancedContentShape(contents[existingIndex])
-      contents[existingIndex] = {
-        ...existing,
-        category: existing.category || String(detected.category || 'Other'),
-        room: existing.room || roomName,
-        location: existing.location || roomName,
-        roomId: existing.roomId || String(photo.roomId || ''),
-        quantity: Math.max(existing.quantity || 1, Number(detected.quantity || 1)),
-        quantityUnit: existing.quantityUnit || String(detected.quantityUnit || 'each'),
-        replacementCost: Math.max(parseMoneyValue(existing.replacementCost), parseMoneyValue(detected.replacementPrice)),
-        unitPrice: Math.max(parseMoneyValue(existing.unitPrice), parseMoneyValue(detected.replacementPrice)),
-        contaminated: data.claimType === 'category3_sewage' ? true : Boolean(existing.contaminated),
-        disposition: normalizeDisposition(existing.disposition || ruled.disposition),
-        sourcePhotoName: mergeSourcePhotoNames(existing.sourcePhotoName, evidencePhotos.map((entry) => entry.photoName).join(', ')),
-        evidencePhotos: mergeEvidencePhotos(existing.evidencePhotos, evidencePhotos),
-        confidence: Math.max(Number(existing.confidence || 0), Number(detected.confidence || 0)),
-        aiJustification: String(existing.aiJustification || detected.contaminationRationale || ''),
-        source: existing.source || 'ai-draft',
-        status: 'draft',
-        aiBatchId: photo.lastBatchId || existing.aiBatchId,
-      }
-      createdItemIds.push(String(contents[existingIndex].id))
-      continue
-    }
-
-    const itemId = crypto.randomUUID()
-    const nextItem = ensureEnhancedContentShape({
-      id: itemId,
-      itemName: name,
-      label: name,
-      category: String(detected.category || 'Other'),
-      room: roomName,
-      location: roomName,
-      roomId: photo.roomId ? String(photo.roomId) : null,
-      quantity: Math.max(1, Number(detected.quantity || 1)),
-      quantityUnit: String(detected.quantityUnit || 'each'),
-      replacementCost: parseMoneyValue(detected.replacementPrice),
-      unitPrice: parseMoneyValue(detected.replacementPrice),
-      confidence: Number(detected.confidence || 0),
-      contaminated: data.claimType === 'category3_sewage',
-      disposition: normalizeDisposition(detected.likelyDisposition || ruled.disposition),
-      aiJustification: String(detected.contaminationRationale || ''),
-      sourcePhotoName: evidencePhotos.map((entry) => entry.photoName).join(', '),
-      evidencePhotos,
-      source: 'ai-draft',
-      status: 'draft',
-      includedInClaim: true,
-      porousness: detected.porousness,
-      originalPrice: parseMoneyValue(detected.originalPrice),
-      aiBatchId: photo.lastBatchId || undefined,
-    })
-    contents.push(nextItem)
-    createdItemIds.push(itemId)
-  }
-
-  contents = deduplicateDraftItemsBySourcePhotos(contents)
-  const followUpTasks = createFollowUps({ ...data, contents }, photo, parsed, createdItemIds)
-  return { contents, createdItemIds, followUpTasks }
-}
-
-export function autoImportPhotosToAIBuilder(data: ClaimData) {
-  if ((data.aiPhotos || []).length > 0) return data.aiPhotos
-  return (data.photoLibrary || []).map((photo) => ({
-    ...photo,
-    id: photo.id || crypto.randomUUID(),
-    status: 'pending' as const,
-    roomName: String((photo as { roomName?: string }).roomName || ''),
-    analysisMode: data.aiAnalysisMode || 'ITEM_VIEW',
-    source: 'auto-import',
-  }))
-}
-
-function matchPhotoToAI(data: ClaimData, photo: FileItem | AIPhoto, roomName: string) {
-  const directId = String((photo as { id?: string | number }).id || '')
-  const directPath = String(photo.path || '')
-  const directName = String(photo.name || photo.filename || '')
-  const aiPhoto = (data.aiPhotos || []).find((entry) => {
-    const sameId = directId && String(entry.id || '') === directId
-    const samePath = directPath && String(entry.path || '') === directPath
-    const sameUrl = photo.url && entry.url && String(entry.url) === String(photo.url)
-    const sameName = directName && String(entry.name || entry.filename || '') === directName && String(entry.roomName || '') === roomName
-    return sameId || samePath || sameUrl || sameName
-  })
-  if (!aiPhoto) return { aiResultId: null, aiItemCount: 0, analysisMode: '' as const }
-  const aiResult = (data.aiResults || []).find((result) => String(result.photoId || '') === String(aiPhoto.id || ''))
-  return {
-    aiResultId: aiResult ? String(aiResult.id || '') : null,
-    aiItemCount: (aiResult?.detectedItems || []).length,
-    analysisMode: normalizeAnalysisMode(aiPhoto.analysisMode || '', 'ITEM_VIEW'),
-  }
+function matchPhotoToAI(_data: ClaimData, _photo: FileItem | AIPhoto, _roomName: string) {
+  return { analysisMode: '' as AnalysisMode | '', aiResultId: null as string | null, aiItemCount: 0 }
 }
 
 export function buildPhotoLibraryEntries(data: ClaimData): PhotoLibraryEntry[] {
@@ -1891,27 +1437,6 @@ export function deduplicateItemsBySourcePhotos(items: ContentItem[]) {
 
 export function deduplicateDraftItemsBySourcePhotos(items: ContentItem[]) {
   return deduplicateItemsBySourcePhotos(items)
-}
-
-export function createPhotoStack(photos: AIPhoto[], defaultMode: AnalysisMode): AIPhoto {
-  const base = photos[0]
-  const sameRoom = photos.every((photo) => String(photo.roomId || '') === String(base.roomId || ''))
-  const sameMode = photos.every((photo) => photo.analysisMode === base.analysisMode)
-  return {
-    id: crypto.randomUUID(),
-    isStack: true,
-    name: `Photo Stack (${photos.length})`,
-    stackPhotos: photos.map((photo) => ({ ...photo })),
-    stackPhotoIds: photos.map((photo) => String(photo.id || '')),
-    stackPhotoNames: photos.map((photo) => String(photo.name || photo.filename || 'Photo')),
-    roomId: sameRoom ? base.roomId : null,
-    roomName: sameRoom ? base.roomName : 'Mixed',
-    uploadedAt: new Date().toISOString(),
-    status: 'pending',
-    analysisMode: sameMode ? (base.analysisMode || defaultMode) : defaultMode,
-    source: 'stack',
-    collapsed: true,
-  }
 }
 
 // Fuzzy duplicate detection for contents

@@ -12,7 +12,6 @@ export function PhotoLibrary() {
   const data = useClaimStore((state) => state.data)
   const updateData = useClaimStore((state) => state.updateData)
   const pushToast = useUIStore((state) => state.pushToast)
-  const setActiveTab = useUIStore((state) => state.setActiveTab)
   const [filterRoomId, setFilterRoomId] = useState('all')
   const [previewing, setPreviewing] = useState<PhotoLibraryEntry | null>(null)
   const entries = useMemo(() => buildPhotoLibraryEntries(data), [data])
@@ -123,19 +122,6 @@ export function PhotoLibrary() {
                 {previewing.roomName || 'Unassigned'} · {previewing.analysisMode || 'No AI mode'}
               </div>
               <div className="flex gap-3">
-                {previewing.aiResultId ? (
-                  <button
-                    className="button-secondary"
-                    onClick={() => {
-                      setActiveTab('ai-builder')
-                      window.location.hash = '#ai-builder'
-                      setPreviewing(null)
-                    }}
-                    type="button"
-                  >
-                    Open AI Result
-                  </button>
-                ) : null}
                 <button
                   className="button-secondary text-rose-400 hover:text-rose-300"
                   onClick={() => {

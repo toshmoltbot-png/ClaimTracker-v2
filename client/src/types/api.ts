@@ -1,30 +1,3 @@
-export interface AnalyzePhotoRequest {
-  photoUrl?: string
-  photoName?: string
-  imageBase64?: string
-  mimeType?: string
-  roomName?: string
-  analysisMode?: string
-  claimType?: string
-  claimSummary?: Record<string, unknown>
-  claimContext?: Record<string, unknown>
-  annotations?: Array<Record<string, unknown>>
-  fastMode?: boolean
-  [key: string]: unknown
-}
-
-export interface AnalyzePhotoResponse {
-  detectedItems?: Array<Record<string, unknown>>
-  summary?: string
-  sceneSummary?: string
-  riskFlags?: string[]
-  followUpRequests?: string[]
-  confidenceOverall?: number
-  modelUsed?: string
-  partial?: boolean
-  [key: string]: unknown
-}
-
 export interface EnrichItemRequest {
   itemId?: string
   itemName: string
@@ -87,16 +60,6 @@ export interface MaximizerChatResponse {
   reply: string
   followUps?: string[]
   metrics?: Record<string, unknown>
-  [key: string]: unknown
-}
-
-export interface PreScreenPhotosRequest {
-  photos: Array<Record<string, unknown>>
-}
-
-export interface PreScreenPhotosResponse {
-  results?: Array<Record<string, unknown>>
-  suggestedStacks?: string[][]
   [key: string]: unknown
 }
 

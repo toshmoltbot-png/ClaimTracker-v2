@@ -1,8 +1,6 @@
 import type {
   AnalyzeContractorReportRequest,
   AnalyzeContractorReportResponse,
-  AnalyzePhotoRequest,
-  AnalyzePhotoResponse,
   AnalyzeReceiptRequest,
   AnalyzeReceiptResponse,
   EnrichItemRequest,
@@ -10,8 +8,6 @@ import type {
   MaximizerChatRequest,
   MaximizerMetricsRequest,
   MaximizerChatResponse,
-  PreScreenPhotosRequest,
-  PreScreenPhotosResponse,
 } from '@/types/api'
 
 export class ApiError extends Error {
@@ -85,12 +81,10 @@ export function isAIServiceDown(error: unknown): boolean {
 }
 
 export const apiClient = {
-  analyzePhoto: (body: AnalyzePhotoRequest) => postJson<AnalyzePhotoResponse>('/api/analyze-photo', body),
   enrichItem: (body: EnrichItemRequest) => postJson<EnrichItemResponse>('/api/enrich-item', body),
   analyzeReceipt: (body: AnalyzeReceiptRequest) => postJson<AnalyzeReceiptResponse>('/api/analyze-receipt', body),
   analyzeContractorReport: (body: AnalyzeContractorReportRequest) =>
     postJson<AnalyzeContractorReportResponse>('/api/analyze-contractor-report', body),
   maximizerChat: (body: MaximizerChatRequest) => postJson<MaximizerChatResponse>('/api/maximizer/chat', body),
-  preScreenPhotos: (body: PreScreenPhotosRequest) => postJson<PreScreenPhotosResponse>('/api/pre-screen-photos', body),
   maximizerMetrics: (body: MaximizerMetricsRequest) => postJson<Record<string, unknown>>('/api/maximizer/metrics', body),
 }

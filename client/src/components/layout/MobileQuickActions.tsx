@@ -27,18 +27,6 @@ export function MobileQuickActions() {
         <button
           className="flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-slate-300 active:bg-slate-800"
           onClick={() => {
-            setActiveTab('ai-builder')
-            navigate('/#ai-builder')
-          }}
-          type="button"
-        >
-          <span className="text-base">📷</span>
-          <span className="text-[10px]">AI</span>
-        </button>
-
-        <button
-          className="flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-slate-300 active:bg-slate-800"
-          onClick={() => {
             setActiveTab('contents')
             navigate('/#contents')
           }}

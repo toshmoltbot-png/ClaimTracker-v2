@@ -399,7 +399,7 @@ export const CLAIM_TABS = [
   'rooms',
   'floor-plan',
   'photo-library',
-  'ai-builder',
+
   'contents',
   'receipts',
   'expenses',
