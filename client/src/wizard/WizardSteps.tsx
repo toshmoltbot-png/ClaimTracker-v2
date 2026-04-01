@@ -112,6 +112,7 @@ export function WizardSteps() {
   const [_dragPhotoId, _setDragPhotoId] = useState<string | null>(null)
   const [_dropTargetId, _setDropTargetId] = useState<string | null>(null)
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
+  const [itemDraft, setItemDraft] = useState({ name: '', room: '', value: '', category: '' })
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`Processing ${file.name}...`)
@@ -1794,59 +1795,133 @@ export function WizardSteps() {
         )
       }
       case 12: {
-        const itemCount = (data.contents || []).filter((i) => i.includedInClaim !== false).length
-        const totalValue = (data.contents || []).reduce((sum, i) => sum + Number(i.replacementCost || 0), 0)
-        const photoCount = (data.aiPhotos || []).length + data.rooms.reduce((sum, r) => sum + (r.photos || []).length, 0)
+        const items = (data.contents || []).filter((i) => i.includedInClaim !== false)
+        const itemCount = items.length
+        const totalValue = items.reduce((sum, i) => sum + Number(i.replacementCost || 0), 0)
+        const roomOptions = data.rooms.map((r) => ({ id: String(r.id), name: r.name || 'Untitled' }))
+
+        function addItem() {
+          if (!itemDraft.name.trim()) { pushToast('Enter an item name.', 'warning'); return }
+          const newItem = {
+            id: crypto.randomUUID(),
+            itemName: itemDraft.name.trim(),
+            room: itemDraft.room || roomOptions[0]?.name || 'Unknown',
+            roomId: roomOptions.find((r) => r.name === itemDraft.room)?.id || roomOptions[0]?.id || null,
+            location: itemDraft.room || roomOptions[0]?.name || 'Unknown',
+            category: itemDraft.category || 'Other',
+            quantity: 1,
+            quantityUnit: 'each' as const,
+            replacementCost: Number(itemDraft.value) || 0,
+            unitPrice: Number(itemDraft.value) || 0,
+            contaminated: data.claimType === 'category3_sewage',
+            disposition: 'inspected',
+            source: 'manual',
+            status: 'draft',
+            includedInClaim: true,
+          }
+          updateData((current) => ({ ...current, contents: [...current.contents, newItem] }))
+          setItemDraft({ name: '', room: itemDraft.room, value: '', category: '' })
+          pushToast(`"${newItem.itemName}" added.`, 'success')
+        }
+
         return (
           <div className="space-y-5">
-            {itemCount > 0 ? (
-              <>
-                <h3 className="text-xl font-semibold text-white">Review your damaged items</h3>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4 text-center">
-                    <p className="text-2xl font-semibold text-white">{itemCount}</p>
-                    <p className="mt-1 text-xs text-slate-400">Items listed</p>
-                  </div>
-                  <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4 text-center">
-                    <p className="text-2xl font-semibold text-white">{formatCurrency(totalValue)}</p>
-                    <p className="mt-1 text-xs text-slate-400">Total value</p>
-                  </div>
-                  <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4 text-center">
-                    <p className="text-2xl font-semibold text-white">{(data.contents || []).filter((i) => i.enrichment?.revised || i.enriched).length}</p>
-                    <p className="mt-1 text-xs text-slate-400">Price-verified</p>
-                  </div>
+            <div>
+              <h3 className="text-xl font-semibold text-white">List your damaged items</h3>
+              <p className="mt-2 text-sm leading-7 text-slate-300">
+                Go through your photos and add each damaged item below. You can always edit details later in the Contents tab.
+              </p>
+            </div>
+
+            {/* Quick add form */}
+            <div className="rounded-2xl border border-sky-400/20 bg-sky-950/20 px-5 py-5 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-400">Add an item</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs text-slate-400">Item name *</label>
+                  <input
+                    className="field mt-1 w-full"
+                    placeholder="e.g. Samsung TV, Nike shoes, desk lamp"
+                    value={itemDraft.name}
+                    onChange={(e) => setItemDraft((d) => ({ ...d, name: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') addItem() }}
+                  />
                 </div>
-                <button className="button-primary" onClick={() => {
-                  setWizardOpen(false)
-                  setActiveTab('contents')
-                  useUIStore.getState().setWizardReturnStep(13)
-                }} type="button">Review and Edit Items</button>
-                <button className="button-secondary" onClick={nextStep} type="button">Looks Good, Continue</button>
-              </>
-            ) : (
-              <>
-                <h3 className="text-xl font-semibold text-white">Now let's list your damaged items</h3>
-                <div className="rounded-2xl border border-sky-400/20 bg-sky-950/20 px-5 py-5 space-y-3">
-                  <p className="text-sm leading-7 text-slate-300">
-                    You've uploaded <strong className="text-white">{photoCount} photo{photoCount === 1 ? '' : 's'}</strong> — great work. Now it's time to list each damaged item with its details: name, room, estimated value, and condition.
-                  </p>
-                  <p className="text-sm leading-7 text-slate-400">
-                    Head to the <strong className="text-white">Contents</strong> tab to add your items. Your photos will be right there for reference.
-                  </p>
+                <div>
+                  <label className="text-xs text-slate-400">Room</label>
+                  <select className="field mt-1 w-full" value={itemDraft.room} onChange={(e) => setItemDraft((d) => ({ ...d, room: e.target.value }))}>
+                    <option value="">Select room</option>
+                    {roomOptions.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
+                  </select>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button className="button-primary" onClick={() => {
-                    setWizardOpen(false)
-                    setActiveTab('contents')
-                    useUIStore.getState().setWizardReturnStep(12)
-                  }} type="button">
-                    Start Adding Items →
-                  </button>
-                  <button className="button-secondary" onClick={nextStep} type="button">
-                    I'll do this later
-                  </button>
+                <div>
+                  <label className="text-xs text-slate-400">Estimated value ($)</label>
+                  <input
+                    className="field mt-1 w-full"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={itemDraft.value}
+                    onChange={(e) => setItemDraft((d) => ({ ...d, value: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') addItem() }}
+                  />
                 </div>
-              </>
+                <div>
+                  <label className="text-xs text-slate-400">Category</label>
+                  <select className="field mt-1 w-full" value={itemDraft.category} onChange={(e) => setItemDraft((d) => ({ ...d, category: e.target.value }))}>
+                    <option value="">Select category</option>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Furniture">Furniture</option>
+                    <option value="Appliances">Appliances</option>
+                    <option value="Clothing">Clothing</option>
+                    <option value="Sports Equipment">Sports Equipment</option>
+                    <option value="Tools">Tools</option>
+                    <option value="Kitchen">Kitchen</option>
+                    <option value="Bedding/Linens">Bedding/Linens</option>
+                    <option value="Personal Items">Personal Items</option>
+                    <option value="Health/Medical">Health/Medical</option>
+                    <option value="Toys/Games">Toys/Games</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+              <button className="button-primary" onClick={addItem} type="button">
+                + Add Item
+              </button>
+            </div>
+
+            {/* Items added so far */}
+            {itemCount > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-white">{itemCount} item{itemCount === 1 ? '' : 's'} · {formatCurrency(totalValue)}</p>
+                </div>
+                <div className="max-h-60 overflow-y-auto space-y-2 rounded-2xl border border-[color:var(--border)] bg-slate-950/30 p-3">
+                  {items.map((item) => (
+                    <div className="flex items-center justify-between rounded-xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-2.5" key={item.id}>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-white">{item.itemName || 'Unnamed'}</p>
+                        <p className="text-xs text-slate-500">{item.room || 'No room'}{item.category ? ` · ${item.category}` : ''}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-slate-200">{formatCurrency(Number(item.replacementCost || 0))}</span>
+                        <button
+                          className="text-xs text-rose-400 hover:text-rose-300"
+                          onClick={() => updateData((current) => ({ ...current, contents: current.contents.filter((c) => c.id !== item.id) }))}
+                          type="button"
+                        >✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {itemCount === 0 && (
+              <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-6 text-center">
+                <p className="text-sm text-slate-500">No items yet. Add your first item above.</p>
+              </div>
             )}
           </div>
         )
