@@ -25,7 +25,7 @@ import { fmtUSDate } from '@/lib/dates'
 import { apiClient } from '@/lib/api'
 import { normalizeReceiptPayload, getReceiptItems } from '@/lib/claimWorkflow'
 import { extractPolicyText, parsePolicyFields } from '@/lib/policyParser'
-import { uploadFile } from '@/lib/firebase'
+import { deleteStorageFile, uploadFile } from '@/lib/firebase'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import type { AIPhoto, AnalysisMode, ExpenseEntry, FileItem, Receipt, Room } from '@/types/claim'
@@ -580,9 +580,11 @@ export function WizardSteps() {
                               src={photo.url || photo.dataUrl || photo.data || ''}
                             />
                             <button
-                              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100"
+                              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white transition hover:bg-rose-600"
                               onClick={() => {
                                 const photoKey = String(photo.id || photo.url || photo.path)
+                                if (photo.url && typeof photo.url === 'string' && photo.url.startsWith('http')) void deleteStorageFile(photo.url)
+                                if (photo.path && typeof photo.path === 'string') void deleteStorageFile(photo.path)
                                 updateData((current) => ({
                                   ...current,
                                   rooms: current.rooms.map((r) =>
