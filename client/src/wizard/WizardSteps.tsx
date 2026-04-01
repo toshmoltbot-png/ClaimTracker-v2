@@ -1846,11 +1846,45 @@ export function WizardSteps() {
             <button className="button-secondary text-sm" onClick={closeWizard} type="button">
               Save and Exit
             </button>
-            {wizard.step < steps.length ? (
-              <button className="button-primary text-sm" onClick={nextStep} type="button">
-                Next Step
-              </button>
-            ) : null}
+            {(() => {
+              // Step 4 (Room Photos): guide user through each room before advancing
+              if (wizard.step === 4 && data.rooms.length > 0) {
+                const currentIdx = data.rooms.findIndex((r) => r.id === photoRoomId)
+                const hasNext = currentIdx >= 0 && currentIdx < data.rooms.length - 1
+                const roomsLeft = data.rooms.filter((r, i) => i > currentIdx && (r.photos || []).length === 0)
+                if (hasNext && roomsLeft.length > 0) {
+                  return (
+                    <>
+                      <button className="button-primary text-sm" onClick={() => setPhotoRoomId(data.rooms[currentIdx + 1]?.id || '')} type="button">
+                        Next Room ({roomsLeft.length} left)
+                      </button>
+                      <button className="text-xs text-slate-500 hover:text-slate-300" onClick={nextStep} type="button">
+                        Skip rooms →
+                      </button>
+                    </>
+                  )
+                }
+              }
+              // Step 6 (Item Photos): same pattern for item photo upload
+              if (wizard.step === 6) {
+                const hasItemPhotos = (data.photoLibrary || []).length > 0 || (data.aiPhotos || []).length > 0
+                if (!hasItemPhotos) {
+                  return (
+                    <>
+                      <button className="button-primary text-sm" onClick={nextStep} type="button">
+                        Next Step
+                      </button>
+                    </>
+                  )
+                }
+              }
+              // Default
+              return wizard.step < steps.length ? (
+                <button className="button-primary text-sm" onClick={nextStep} type="button">
+                  Next Step
+                </button>
+              ) : null
+            })()}
           </div>
         </div>
       </div>
