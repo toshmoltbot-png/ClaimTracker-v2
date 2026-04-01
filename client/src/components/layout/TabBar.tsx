@@ -9,7 +9,7 @@ const tabs: Array<{ id: Exclude<ClaimTabId, 'maximizer'>; label: string; badge?:
   { id: 'rooms', label: 'Rooms', badge: (counts) => counts.rooms },
   { id: 'floor-plan', label: 'Floor Plan' },
   { id: 'photo-library', label: 'Photo Library', badge: (counts) => counts.photoLibrary },
-  { id: 'ai-builder', label: 'AI Builder', badge: (counts) => counts.aiPhotos },
+  { id: 'ai-builder', label: 'Photo Manager', badge: (counts) => counts.aiPhotos },
   { id: 'contents', label: 'Contents', badge: (counts) => counts.contents },
   { id: 'receipts', label: 'Receipts', badge: (counts) => counts.receipts },
   { id: 'expenses', label: 'Expenses' },

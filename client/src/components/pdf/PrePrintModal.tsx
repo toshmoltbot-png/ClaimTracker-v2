@@ -65,7 +65,7 @@ function getPPMSummary(data: ClaimData) {
     items: [
       ...rooms.filter((room) => !(room.photos || []).length).map((room) => ({ id: `photo-${room.id}`, text: `${room.name || 'Room'} has no room photos attached.`, tab: 'rooms' as const })),
       ...(noPhotoItems.length ? [{ id: 'item-photos', text: `${noPhotoItems.length} inventory item${noPhotoItems.length === 1 ? '' : 's'} have no supporting photos.`, tab: 'contents' as const }] : []),
-      ...(!(data.aiPhotos || []).length && !(data.photoLibrary || []).length ? [{ id: 'library', text: 'No AI Builder or photo library evidence has been uploaded.', tab: 'photo-library' as const }] : []),
+      ...(!(data.aiPhotos || []).length && !(data.photoLibrary || []).length ? [{ id: 'library', text: 'No photo evidence has been uploaded.', tab: 'photo-library' as const }] : []),
     ],
   }
 

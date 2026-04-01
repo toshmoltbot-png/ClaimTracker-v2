@@ -84,7 +84,7 @@ export function Dashboard() {
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
             <button className="button-primary" onClick={() => navigateToTab(setActiveTab, navigate, 'ai-builder')} type="button">
-              AI Builder
+              Photo Manager
             </button>
             <button className="button-secondary" onClick={() => openModal('prePrint')} type="button">
               Generate Report

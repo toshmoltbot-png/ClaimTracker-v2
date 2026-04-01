@@ -16,7 +16,7 @@ export function ToastViewport() {
     const timers = toasts.map((toast) =>
       window.setTimeout(() => {
         dismissToast(toast.id)
-      }, 3200),
+      }, 1500),
     )
 
     return () => {

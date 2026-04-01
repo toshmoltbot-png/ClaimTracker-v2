@@ -1038,14 +1038,14 @@ export function getNextStepSuggestion(data: ClaimData): NextStepSuggestion {
     return {
       title: 'Add photo evidence',
       description: 'Upload room or item photos so AI analysis and documentation have support.',
-      actionLabel: 'Go to AI Builder',
+      actionLabel: 'Go to Photo Manager',
       targetTab: 'ai-builder',
     }
   }
   if (!summary.itemCount) {
     return {
       title: 'Start the contents inventory',
-      description: 'Create the first few line items manually or use AI Builder output to seed the list.',
+      description: 'Create the first few line items to seed the inventory.',
       actionLabel: 'Open Contents',
       targetTab: 'contents',
     }

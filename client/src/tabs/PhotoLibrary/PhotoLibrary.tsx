@@ -50,7 +50,7 @@ export function PhotoLibrary() {
           <p className="text-xs uppercase tracking-[0.3em] text-sky-300">Photo Library</p>
           <h2 className="mt-3 text-2xl font-semibold text-white">All claim photos in one grid</h2>
           <p className="mt-2 text-sm leading-7 text-slate-300">
-            Browse room photos, library uploads, and AI Builder inputs together. Filter by room, preview full size, and jump into linked AI results.
+            Browse room photos, library uploads, and photo stacks together. Filter by room and preview full size.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -67,7 +67,7 @@ export function PhotoLibrary() {
             onClick={() => updateData((current) => ({ ...current, aiPhotos: current.aiPhotos.length ? current.aiPhotos : current.photoLibrary.map((photo) => ({ ...photo, status: 'pending', analysisMode: current.aiAnalysisMode, source: 'photo-library' })) }))}
             type="button"
           >
-            Send to AI Builder
+            Send to Photo Manager
           </button>
         </div>
       </section>
@@ -132,8 +132,8 @@ export function PhotoLibrary() {
                   <button
                     className="button-secondary"
                     onClick={() => {
-                      setActiveTab('ai-builder')
-                      window.location.hash = '#ai-builder'
+                      setActiveTab('photo-library')
+                      window.location.hash = '#photo-library'
                       setPreviewing(null)
                     }}
                     type="button"

@@ -33,7 +33,7 @@ export function MobileQuickActions() {
           type="button"
         >
           <span className="text-base">📷</span>
-          <span className="text-[10px]">AI</span>
+          <span className="text-[10px]">Photos</span>
         </button>
 
         <button

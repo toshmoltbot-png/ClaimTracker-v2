@@ -297,7 +297,7 @@ export function WizardSteps() {
         aiNeedsUpdate: true,
       }
     })
-    pushToast('Pre-screen recommendations sent to AI Builder.', 'success')
+    pushToast('Pre-screen recommendations applied.', 'success')
   }
   void applyPreScreen
 
