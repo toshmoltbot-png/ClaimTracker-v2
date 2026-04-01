@@ -1285,7 +1285,7 @@ export function WizardSteps() {
                     )}
 
                     {aleSkipped.has(card.category) && thisEntries.length === 0 && (
-                      <p className="text-sm text-slate-500">Marked as not applicable.</p>
+                      <p className="text-sm text-slate-500">Skipped — doesn't apply to your claim.</p>
                     )}
 
                     {/* Action buttons */}
@@ -1312,7 +1312,7 @@ export function WizardSteps() {
                           }}
                           type="button"
                         >
-                          Not Applicable
+                          No, Skip This
                         </button>
                       )}
                       {aleSkipped.has(card.category) && thisEntries.length === 0 && (
