@@ -1887,7 +1887,14 @@ export function WizardSteps() {
                   )
                 }
               }
-              // Default
+              // Default — block navigation while uploads are in flight
+              if (uploadingCount > 0) {
+                return (
+                  <button className="button-primary text-sm opacity-60" disabled type="button">
+                    Uploading {uploadingCount} photo{uploadingCount === 1 ? '' : 's'}…
+                  </button>
+                )
+              }
               return wizard.step < steps.length ? (
                 <button className="button-primary text-sm" onClick={nextStep} type="button">
                   Next Step
