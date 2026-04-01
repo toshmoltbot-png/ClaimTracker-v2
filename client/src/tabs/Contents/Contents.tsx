@@ -336,9 +336,9 @@ export function Contents() {
               Find Duplicates
             </button>
           )}
-          <details className="relative">
-            <summary className="button-secondary list-none">More Actions</summary>
-            <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[color:var(--border)] bg-slate-950 p-2 shadow-xl">
+          <details className="relative z-20">
+            <summary className="button-secondary list-none cursor-pointer">More Actions</summary>
+            <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[color:var(--border)] bg-slate-950 p-2 shadow-xl z-30">
               <button className="button-secondary w-full justify-start px-3 py-2 text-xs" onClick={() => void handleBatchEnrich(false)} type="button">
                 Enrich Unenriched
               </button>
