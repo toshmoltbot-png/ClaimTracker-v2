@@ -1796,15 +1796,16 @@ export function WizardSteps() {
       case 12: {
         const itemCount = (data.contents || []).filter((i) => i.includedInClaim !== false).length
         const totalValue = (data.contents || []).reduce((sum, i) => sum + Number(i.replacementCost || 0), 0)
+        const photoCount = (data.aiPhotos || []).length + data.rooms.reduce((sum, r) => sum + (r.photos || []).length, 0)
         return (
           <div className="space-y-5">
-            <h3 className="text-xl font-semibold text-white">Review your damaged items</h3>
             {itemCount > 0 ? (
               <>
+                <h3 className="text-xl font-semibold text-white">Review your damaged items</h3>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4 text-center">
                     <p className="text-2xl font-semibold text-white">{itemCount}</p>
-                    <p className="mt-1 text-xs text-slate-400">Items found</p>
+                    <p className="mt-1 text-xs text-slate-400">Items listed</p>
                   </div>
                   <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/40 px-4 py-4 text-center">
                     <p className="text-2xl font-semibold text-white">{formatCurrency(totalValue)}</p>
@@ -1823,10 +1824,29 @@ export function WizardSteps() {
                 <button className="button-secondary" onClick={nextStep} type="button">Looks Good, Continue</button>
               </>
             ) : (
-              <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
-                <p className="text-sm text-slate-400">No items found yet. Go back to the previous step to scan your photos, or continue and add items manually later.</p>
-                <button className="button-primary mt-4" onClick={previousStep} type="button">Go Back to Photo Scan</button>
-              </div>
+              <>
+                <h3 className="text-xl font-semibold text-white">Now let's list your damaged items</h3>
+                <div className="rounded-2xl border border-sky-400/20 bg-sky-950/20 px-5 py-5 space-y-3">
+                  <p className="text-sm leading-7 text-slate-300">
+                    You've uploaded <strong className="text-white">{photoCount} photo{photoCount === 1 ? '' : 's'}</strong> — great work. Now it's time to list each damaged item with its details: name, room, estimated value, and condition.
+                  </p>
+                  <p className="text-sm leading-7 text-slate-400">
+                    Head to the <strong className="text-white">Contents</strong> tab to add your items. Your photos will be right there for reference.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button className="button-primary" onClick={() => {
+                    setWizardOpen(false)
+                    setActiveTab('contents')
+                    useUIStore.getState().setWizardReturnStep(12)
+                  }} type="button">
+                    Start Adding Items →
+                  </button>
+                  <button className="button-secondary" onClick={nextStep} type="button">
+                    I'll do this later
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )
