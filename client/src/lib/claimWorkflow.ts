@@ -1405,6 +1405,29 @@ export function createFollowUps(data: ClaimData, photo: AIPhoto, parsed: AIResul
   return nextTasks
 }
 
+function fuzzyItemMatch(existingName: string, newName: string, existingRoom: string, newRoom: string): boolean {
+  const a = existingName.trim().toLowerCase()
+  const b = newName.trim().toLowerCase()
+  // Exact match
+  if (a === b) return existingRoom === newRoom || !existingRoom || existingRoom === 'unknown'
+  // Substring containment (e.g., "Nest Thermostat" vs "Google Nest Thermostat")
+  if (a.includes(b) || b.includes(a)) {
+    return existingRoom === newRoom || !existingRoom || existingRoom === 'unknown'
+  }
+  // Jaccard token similarity
+  const stopWords = new Set(['the', 'a', 'an', 'of', 'for', 'with', 'and', 'in', 'on', 'to', 'by', 'at', 'or'])
+  const tok = (s: string) => new Set(s.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w)))
+  const ta = tok(a)
+  const tb = tok(b)
+  if (ta.size === 0 && tb.size === 0) return false
+  let intersection = 0
+  for (const w of ta) { if (tb.has(w)) intersection++ }
+  const sim = intersection / (ta.size + tb.size - intersection)
+  // High threshold (0.6) to avoid merging truly different items
+  if (sim >= 0.6) return existingRoom === newRoom || !existingRoom || existingRoom === 'unknown'
+  return false
+}
+
 export function upsertDraftContentFromAI(data: ClaimData, photo: AIPhoto, parsed: AIResultRecord) {
   const evidencePhotos = buildEvidencePhotosFromAIPhoto(photo)
   const createdItemIds: string[] = []
@@ -1413,9 +1436,14 @@ export function upsertDraftContentFromAI(data: ClaimData, photo: AIPhoto, parsed
   for (const detected of parsed.detectedItems || []) {
     const name = getDetectedItemLabel(detected)
     const roomName = String(photo.roomName || detected.roomAssignment || 'Unknown')
+    const newRoomNorm = roomName.trim().toLowerCase()
     const existingIndex = contents.findIndex(
-      (item) => String(item.itemName || '').trim().toLowerCase() === name.toLowerCase()
-        && String(item.room || item.location || '').trim().toLowerCase() === roomName.toLowerCase(),
+      (item) => fuzzyItemMatch(
+        String(item.itemName || ''),
+        name,
+        String(item.room || item.location || '').trim().toLowerCase(),
+        newRoomNorm,
+      ),
     )
 
     const ruled = applyCategory3Rules(
