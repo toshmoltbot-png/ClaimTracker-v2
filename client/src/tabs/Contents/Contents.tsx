@@ -26,7 +26,18 @@ import { EnrichModal } from '@/tabs/Contents/EnrichModal'
 function getItemPhotoUrl(item: ContentItemType, aiPhotos: AIPhoto[]): string | null {
   const ep = (item.evidencePhotos || [])[0]
   if (!ep?.photoId) return null
-  const photo = aiPhotos.find((p) => String(p.id) === String(ep.photoId))
+  const targetId = String(ep.photoId)
+  // Search top-level photos first
+  let photo = aiPhotos.find((p) => String(p.id) === targetId)
+  // If not found, search inside stacks (stacked child photos aren't top-level)
+  if (!photo) {
+    for (const p of aiPhotos) {
+      if (p.isStack && Array.isArray(p.stackPhotos)) {
+        const child = p.stackPhotos.find((c) => String(c.id) === targetId)
+        if (child) { photo = child; break }
+      }
+    }
+  }
   return photo?.thumbUrl || photo?.url || photo?.dataUrl || null
 }
 

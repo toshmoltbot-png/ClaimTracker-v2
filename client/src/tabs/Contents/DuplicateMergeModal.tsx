@@ -8,7 +8,17 @@ import type { AIPhoto } from '@/types/claim'
 function getItemPhotoUrl(item: ContentItemType, aiPhotos: AIPhoto[]): string | null {
   const ep = (item.evidencePhotos || [])[0]
   if (!ep?.photoId) return null
-  const photo = aiPhotos.find((p) => String(p.id) === String(ep.photoId))
+  const targetId = String(ep.photoId)
+  let photo = aiPhotos.find((p) => String(p.id) === targetId)
+  // Search inside stacks if not found at top level
+  if (!photo) {
+    for (const p of aiPhotos) {
+      if (p.isStack && Array.isArray(p.stackPhotos)) {
+        const child = p.stackPhotos.find((c) => String(c.id) === targetId)
+        if (child) { photo = child; break }
+      }
+    }
+  }
   if (photo?.isStack && photo.stackPhotos?.length) {
     const sp = photo.stackPhotos[0]
     return sp?.thumbUrl || sp?.url || sp?.dataUrl || null
