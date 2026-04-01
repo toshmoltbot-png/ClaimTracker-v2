@@ -557,7 +557,7 @@ export function WizardSteps() {
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-400">Adding photos to</p>
                         <h3 className="text-xl font-bold text-white">{currentRoom?.name || 'Room'}</h3>
                       </div>
-                      <button className="button-secondary text-sm" onClick={() => hasNextRoom ? setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '') : nextStep()} type="button">→</button>
+                      <button className="button-secondary text-sm" disabled={uploadingCount > 0} onClick={() => hasNextRoom ? setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '') : nextStep()} type="button">→</button>
                     </div>
                     <span className="rounded-full bg-sky-400/15 px-3 py-1 text-sm font-semibold text-sky-200">
                       {roomIndex + 1} of {data.rooms.length} · {(currentRoom?.photos || []).length} photos
@@ -623,8 +623,8 @@ export function WizardSteps() {
 
                 {/* ── Next room / done indicator — secondary, below grid ── */}
                 {hasNextRoom ? (
-                  <button className="button-secondary w-full text-sm" onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">
-                    Continue to next room →
+                  <button className="button-secondary w-full text-sm" disabled={uploadingCount > 0} onClick={() => setPhotoRoomId(data.rooms[roomIndex + 1]?.id || '')} type="button">
+                    {uploadingCount > 0 ? `Uploading ${uploadingCount} photo${uploadingCount === 1 ? '' : 's'}…` : 'Continue to next room →'}
                   </button>
                 ) : (
                   <p className="text-sm text-emerald-400">All rooms covered. Click Next to continue.</p>
@@ -1851,6 +1851,13 @@ export function WizardSteps() {
             {(() => {
               // Step 4 (Room Photos): guide user through each room before advancing
               if (wizard.step === 4 && data.rooms.length > 0) {
+                if (uploadingCount > 0) {
+                  return (
+                    <button className="button-primary text-sm opacity-60" disabled type="button">
+                      Uploading {uploadingCount} photo{uploadingCount === 1 ? '' : 's'}…
+                    </button>
+                  )
+                }
                 const currentIdx = data.rooms.findIndex((r) => r.id === photoRoomId)
                 const hasNext = currentIdx >= 0 && currentIdx < data.rooms.length - 1
                 const roomsLeft = data.rooms.filter((r, i) => i > currentIdx && (r.photos || []).length === 0)
