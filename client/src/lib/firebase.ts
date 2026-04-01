@@ -8,7 +8,7 @@ import {
   type User,
 } from 'firebase/auth'
 import { doc, getDoc, getFirestore, setDoc } from 'firebase/firestore'
-import { getDownloadURL, getStorage, ref, uploadBytes, uploadString } from 'firebase/storage'
+import { deleteObject, getDownloadURL, getStorage, ref, uploadBytes, uploadString } from 'firebase/storage'
 import type { ClaimData, FileItem } from '@/types/claim'
 
 const firebaseConfig = {
@@ -113,6 +113,26 @@ export async function uploadFile(file: File, folder = 'uploads'): Promise<FileIt
 
 export async function storeMediaFile(file: File, meta?: { folder?: string }) {
   return uploadFile(file, meta?.folder || 'media')
+}
+
+/** Delete a file from Firebase Storage by path or full URL */
+export async function deleteStorageFile(pathOrUrl: string): Promise<boolean> {
+  try {
+    let storagePath = pathOrUrl
+    // If it's a full Firebase Storage URL, extract the path
+    if (pathOrUrl.startsWith('http')) {
+      const match = pathOrUrl.match(/\/o\/(.+?)(\?|$)/)
+      if (match) storagePath = decodeURIComponent(match[1])
+      else return false
+    }
+    if (!storagePath) return false
+    const fileRef = ref(storage, storagePath)
+    await deleteObject(fileRef)
+    return true
+  } catch {
+    // File may not exist or already deleted — that's fine
+    return false
+  }
 }
 
 export async function storeDataUrl(dataUrl: string, meta?: { filename?: string; folder?: string }) {

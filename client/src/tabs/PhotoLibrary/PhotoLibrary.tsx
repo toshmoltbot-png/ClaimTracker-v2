@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Modal } from '@/components/shared/Modal'
 import { buildPhotoLibraryEntries, type PhotoLibraryEntry } from '@/lib/claimWorkflow'
-import { storeDataUrl } from '@/lib/firebase'
+import { deleteStorageFile, storeDataUrl } from '@/lib/firebase'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
 import type { FileItem } from '@/types/claim'
@@ -81,26 +81,31 @@ export function PhotoLibrary() {
           <PhotoGrid
             onPreview={setPreviewing}
             onDelete={(photo) => {
-              updateData((current) => {
-                const photoId = String(photo.photo?.id || photo.id || '')
-                if (photo.sourceType === 'library') {
-                  return { ...current, photoLibrary: current.photoLibrary.filter((p) => String(p.id) !== photoId) }
-                }
-                if (photo.sourceType === 'room' && photo.roomId) {
-                  return {
-                    ...current,
-                    rooms: current.rooms.map((room) =>
-                      String(room.id) === String(photo.roomId)
-                        ? { ...room, photos: (room.photos || []).filter((p) => String(p.id) !== photoId) }
-                        : room,
-                    ),
-                  }
-                }
-                if (photo.sourceType === 'ai') {
-                  return { ...current, aiPhotos: (current.aiPhotos || []).filter((p) => String(p.id) !== photoId) }
-                }
-                return current
-              })
+              const photoId = String(photo.photo?.id || photo.id || '')
+              // Delete from Firebase Storage if it has a URL
+              const url = photo.photo?.url || photo.photo?.path
+              if (url && typeof url === 'string' && url.startsWith('http')) {
+                void deleteStorageFile(url)
+              }
+              if (photo.photo?.path && typeof photo.photo.path === 'string') {
+                void deleteStorageFile(photo.photo.path)
+              }
+              // Remove from ALL locations in claim data
+              updateData((current) => ({
+                ...current,
+                photoLibrary: current.photoLibrary.filter((p) => String(p.id) !== photoId),
+                rooms: current.rooms.map((room) => ({
+                  ...room,
+                  photos: (room.photos || []).filter((p) => String(p.id) !== photoId),
+                })),
+                aiPhotos: (current.aiPhotos || [])
+                  .filter((p) => String(p.id) !== photoId)
+                  .map((p) => p.isStack && Array.isArray(p.stackPhotos)
+                    ? { ...p, stackPhotos: p.stackPhotos.filter((sp) => String(sp.id) !== photoId) }
+                    : p
+                  )
+                  .filter((p) => !p.isStack || (Array.isArray(p.stackPhotos) && p.stackPhotos.length > 0)),
+              }))
               pushToast('Photo deleted.', 'success')
             }}
             photos={filtered}
@@ -140,26 +145,29 @@ export function PhotoLibrary() {
                   className="button-secondary text-rose-400 hover:text-rose-300"
                   onClick={() => {
                     const photo = previewing
-                    updateData((current) => {
-                      const photoId = String(photo.photo?.id || photo.id || '')
-                      if (photo.sourceType === 'library') {
-                        return { ...current, photoLibrary: current.photoLibrary.filter((p) => String(p.id) !== photoId) }
-                      }
-                      if (photo.sourceType === 'room' && photo.roomId) {
-                        return {
-                          ...current,
-                          rooms: current.rooms.map((room) =>
-                            String(room.id) === String(photo.roomId)
-                              ? { ...room, photos: (room.photos || []).filter((p) => String(p.id) !== photoId) }
-                              : room,
-                          ),
-                        }
-                      }
-                      if (photo.sourceType === 'ai') {
-                        return { ...current, aiPhotos: (current.aiPhotos || []).filter((p) => String(p.id) !== photoId) }
-                      }
-                      return current
-                    })
+                    const photoId = String(photo.photo?.id || photo.id || '')
+                    const url = photo.photo?.url || photo.photo?.path
+                    if (url && typeof url === 'string' && url.startsWith('http')) {
+                      void deleteStorageFile(url)
+                    }
+                    if (photo.photo?.path && typeof photo.photo.path === 'string') {
+                      void deleteStorageFile(photo.photo.path)
+                    }
+                    updateData((current) => ({
+                      ...current,
+                      photoLibrary: current.photoLibrary.filter((p) => String(p.id) !== photoId),
+                      rooms: current.rooms.map((room) => ({
+                        ...room,
+                        photos: (room.photos || []).filter((p) => String(p.id) !== photoId),
+                      })),
+                      aiPhotos: (current.aiPhotos || [])
+                        .filter((p) => String(p.id) !== photoId)
+                        .map((p) => p.isStack && Array.isArray(p.stackPhotos)
+                          ? { ...p, stackPhotos: p.stackPhotos.filter((sp) => String(sp.id) !== photoId) }
+                          : p
+                        )
+                        .filter((p) => !p.isStack || (Array.isArray(p.stackPhotos) && p.stackPhotos.length > 0)),
+                    }))
                     pushToast('Photo deleted.', 'success')
                     setPreviewing(null)
                   }}
