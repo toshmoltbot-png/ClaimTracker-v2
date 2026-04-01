@@ -280,14 +280,8 @@ export function AIBuilder() {
 
     setIsRunningBatch(true)
     setProcessedCount(0)
-    let idx = 0
     for (const photo of targets) {
       if (abortRef.current?.signal.aborted) break
-      // Pace requests: 1.5s delay between photos to avoid upstream rate limits
-      if (idx > 0) {
-        await new Promise((r) => setTimeout(r, 1500))
-      }
-      idx += 1
       await analyzeOne(String(photo.id || ''))
       setProcessedCount((count) => count + 1)
     }

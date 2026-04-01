@@ -393,15 +393,8 @@ export function WizardSteps() {
     const controller = new AbortController()
     aiAbortRef.current = controller
 
-    let photoIndex = 0
     for (const photo of pending) {
       if (controller.signal.aborted) break
-
-      // Pace requests: 1.5s delay between photos to avoid upstream rate limits
-      if (photoIndex > 0) {
-        await new Promise((r) => setTimeout(r, 1500))
-      }
-      photoIndex += 1
 
       const photoId = String(photo.id || '')
 
