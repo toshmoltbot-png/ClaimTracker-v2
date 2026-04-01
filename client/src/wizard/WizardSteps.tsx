@@ -734,12 +734,17 @@ export function WizardSteps() {
               </div>
             )}
 
-            {duplicateCount > 0 && (
+            {duplicateCount > 0 ? (
               <div className="rounded-2xl border border-rose-400/30 bg-rose-400/5 px-5 py-4">
                 <p className="text-sm font-medium text-rose-300">{duplicateCount} possible duplicate{duplicateCount === 1 ? '' : 's'} detected ({duplicateKeys.size} photos)</p>
                 <p className="mt-1 text-xs text-slate-400">Photos with the same filename appear more than once. Look for the red "DUPE" badge below — delete the extra or move it if it's in the wrong room.</p>
               </div>
-            )}
+            ) : totalPhotos > 0 ? (
+              <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 px-5 py-4">
+                <p className="text-sm font-medium text-emerald-300">✓ No duplicates found — photos look good!</p>
+                <p className="mt-1 text-xs text-slate-400">Everything checks out. Hit <strong className="text-white">Next Step</strong> to continue.</p>
+              </div>
+            ) : null}
 
             {data.rooms.map((room) => (
               <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/35" key={room.id}>
