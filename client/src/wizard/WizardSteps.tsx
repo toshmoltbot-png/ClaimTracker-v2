@@ -802,6 +802,36 @@ export function WizardSteps() {
       case 6: {
         const wizardItemPhotos = (data.aiPhotos || []).filter((p) => (p as Record<string, unknown>).source === 'wizard-item-upload')
         const totalItemPhotos = wizardItemPhotos.length
+
+        // Duplicate detection for item photos (same logic as step 5)
+        const itemByName = new Map<string, string[]>()
+        const itemBySize = new Map<string, string[]>()
+        const itemDupeKeys = new Set<string>()
+        let itemDupeCount = 0
+        for (const photo of wizardItemPhotos) {
+          const pk = String((photo as Record<string, unknown>).id || (photo as Record<string, unknown>).url || (photo as Record<string, unknown>).path)
+          const name = String((photo as Record<string, unknown>).name || (photo as Record<string, unknown>).filename || '').toLowerCase().trim()
+          const size = Number((photo as Record<string, unknown>).size || 0)
+          if (name) {
+            if (!itemByName.has(name)) itemByName.set(name, [])
+            itemByName.get(name)!.push(pk)
+          }
+          if (size > 10240) {
+            const sizeKey = String(size)
+            if (!itemBySize.has(sizeKey)) itemBySize.set(sizeKey, [])
+            itemBySize.get(sizeKey)!.push(pk)
+          }
+        }
+        for (const [, keys] of itemByName) {
+          if (keys.length > 1) { itemDupeCount++; for (const k of keys) itemDupeKeys.add(k) }
+        }
+        for (const [, keys] of itemBySize) {
+          if (keys.length > 1) {
+            const uncaught = keys.filter((k) => !itemDupeKeys.has(k))
+            if (uncaught.length > 0) { itemDupeCount++; for (const k of keys) itemDupeKeys.add(k) }
+          }
+        }
+
         return (
           <div className="space-y-5">
             <div className="rounded-2xl border border-sky-400/30 bg-sky-950/20 p-5 space-y-4">
@@ -871,11 +901,24 @@ export function WizardSteps() {
                 </div>
               )}
 
+              {/* Duplicate / clean status */}
+              {totalItemPhotos > 0 && (itemDupeCount > 0 ? (
+                <div className="rounded-2xl border border-rose-400/30 bg-rose-400/5 px-5 py-4">
+                  <p className="text-sm font-medium text-rose-300">{itemDupeCount} possible duplicate{itemDupeCount === 1 ? '' : 's'} detected ({itemDupeKeys.size} photos)</p>
+                  <p className="mt-1 text-xs text-slate-400">Look for the red "DUPE" badge below and delete the extras.</p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 px-5 py-4">
+                  <p className="text-sm font-medium text-emerald-300">✓ No duplicates found — photos look good!</p>
+                  <p className="mt-1 text-xs text-slate-400">Hit <strong className="text-white">Next Step</strong> to continue.</p>
+                </div>
+              ))}
+
               {/* Thumbnail grid */}
               {totalItemPhotos > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-slate-300">
-                    {totalItemPhotos} photo{totalItemPhotos === 1 ? '' : 's'} ready for AI analysis
+                    {totalItemPhotos} item photo{totalItemPhotos === 1 ? '' : 's'}
                   </p>
                   <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
                     {wizardItemPhotos.map((photo) => {
@@ -883,15 +926,20 @@ export function WizardSteps() {
                       const src = String((photo as Record<string, unknown>).url || (photo as Record<string, unknown>).dataUrl || (photo as Record<string, unknown>).data || '')
                       const name = String((photo as Record<string, unknown>).name || (photo as Record<string, unknown>).filename || 'Item photo')
                       return (
-                        <div className="group relative" key={photoKey}>
+                        <div className={`group relative ${itemDupeKeys.has(photoKey) ? 'rounded-xl ring-2 ring-rose-500' : ''}`} key={photoKey}>
+                          {itemDupeKeys.has(photoKey) && <span className="absolute left-1 top-1 z-10 rounded-full bg-rose-600 px-1.5 py-0.5 text-[9px] font-bold text-white">DUPE</span>}
                           <img
                             alt={name}
                             className="aspect-square rounded-xl object-cover"
                             src={src}
                           />
                           <button
-                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100"
+                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white transition hover:bg-rose-600"
                             onClick={() => {
+                              const url = (photo as Record<string, unknown>).url
+                              const path = (photo as Record<string, unknown>).path
+                              if (url && typeof url === 'string' && url.startsWith('http')) void deleteStorageFile(url)
+                              if (path && typeof path === 'string') void deleteStorageFile(path)
                               updateData((current) => ({
                                 ...current,
                                 aiPhotos: current.aiPhotos.filter((p) => String((p as Record<string, unknown>).id || (p as Record<string, unknown>).url || (p as Record<string, unknown>).path) !== photoKey),
