@@ -1668,11 +1668,21 @@ export function WizardSteps() {
           <div className="space-y-5">
             <div>
               <h3 className="text-lg font-semibold text-white">Group your photos</h3>
-              <p className="mt-2 text-sm leading-7 text-slate-300">
-                {activeGroupId
-                  ? 'Tap photos to add or remove them from this group. Tap "Done" when finished.'
-                  : 'Select 2+ photos and tap "Create Group". To add to an existing group, select the photo(s) first, then tap any photo already in that group.'}
-              </p>
+              {activeGroupId ? (
+                <p className="mt-2 text-sm leading-7 text-slate-300">
+                  Tap photos to add or remove them from this group. Tap <strong className="text-white">"Done"</strong> when finished.
+                </p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <p className="text-sm leading-7 text-slate-300">
+                    Took multiple photos of the same item? Group them together so they're treated as one item in your claim — not counted separately.
+                  </p>
+                  <p className="text-sm leading-7 text-slate-400">
+                    <strong className="text-slate-200">How:</strong> Tap the photos that show the same item, then tap <strong className="text-white">"Create Group"</strong>.
+                    If every photo is a different item, just hit <strong className="text-white">"Skip"</strong> below.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Active group controls — sticky at bottom */}
