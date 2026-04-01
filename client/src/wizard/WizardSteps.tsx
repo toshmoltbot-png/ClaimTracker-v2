@@ -3,6 +3,7 @@ import { PhotoUploader } from '@/components/shared/PhotoUploader'
 import {
   CLAIM_TYPE_OPTIONS,
   ONBOARDING_TIP_PREFIX,
+  autoImportPhotosToAIBuilder,
   buildPhotoLibraryEntries,
   createExpenseEntryDraft,
   ensureFloorPlanSettings,
@@ -17,6 +18,7 @@ import {
   uploadAndAnalyzeContractorReport,
   getExpenseEntriesByCategory,
   removeExpenseEntry,
+  createPhotoStack,
 } from '@/lib/claimWorkflow'
 import { compressImageToDataUrl, dataUrlToBase64, readFileAsDataUrl } from '@/lib/utils'
 import { fmtUSDate } from '@/lib/dates'
@@ -26,7 +28,7 @@ import { extractPolicyText, parsePolicyFields } from '@/lib/policyParser'
 import { uploadFile } from '@/lib/firebase'
 import { useClaimStore } from '@/store/claimStore'
 import { useUIStore } from '@/store/uiStore'
-import type { AnalysisMode, ExpenseEntry, FileItem, Receipt, Room } from '@/types/claim'
+import type { AIPhoto, AnalysisMode, ExpenseEntry, FileItem, Receipt, Room } from '@/types/claim'
 import { FloorPlanCanvas } from '@/tabs/FloorPlan/FloorPlanCanvas'
 import { ReceiptModal } from '@/tabs/Receipts/ReceiptModal'
 import { ExpenseModal } from '@/tabs/Expenses/ExpenseModal'
@@ -43,6 +45,7 @@ const steps = [
   'Receipts',
   'Contractors',
   'Expenses',
+  'Group Photos',
   'Review',
   'Done',
 ] as const
@@ -104,6 +107,11 @@ export function WizardSteps() {
   const [aleCardIndex, setAleCardIndex] = useState(0)
   const [aleSkipped, setAleSkipped] = useState<Set<string>>(new Set())
 
+  const [groupSelected, setGroupSelected] = useState<Set<string>>(new Set())
+  const [_expandedStacks, _setExpandedStacks] = useState<Set<string>>(new Set())
+  const [_dragPhotoId, _setDragPhotoId] = useState<string | null>(null)
+  const [_dropTargetId, _setDropTargetId] = useState<string | null>(null)
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`Processing ${file.name}...`)
@@ -171,6 +179,17 @@ export function WizardSteps() {
   useEffect(() => {
     if (wizard.step === 10) { setExpenseSubStep(1); setAleCardIndex(0) }
   }, [wizard.step])
+
+  // Auto-import photos when entering step 11
+  useEffect(() => {
+    if (wizard.step === 11) {
+      updateData((current) => ({
+        ...current,
+        aiPhotos: current.aiPhotos.length ? current.aiPhotos : autoImportPhotosToAIBuilder(current),
+        aiNeedsUpdate: true,
+      }))
+    }
+  }, [wizard.step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const contentRef = useRef<HTMLDivElement | null>(null)
   const progress = Math.round((wizard.step / steps.length) * 100)
@@ -346,6 +365,7 @@ export function WizardSteps() {
     setEditingExpense(next)
     setExpenseModalOpen(true)
   }
+
 
   function finish(target: 'maximizer' | 'contents') {
     markOnboardingComplete()
@@ -1402,6 +1422,313 @@ export function WizardSteps() {
         )
       }
       case 11: {
+        // Group Photos — color-coded flat grid, all photos always visible
+        const GROUP_COLORS = [
+          { border: 'border-emerald-400', bg: 'bg-emerald-400', ring: 'ring-emerald-400/30', text: 'text-emerald-300', label: 'Green' },
+          { border: 'border-violet-400', bg: 'bg-violet-400', ring: 'ring-violet-400/30', text: 'text-violet-300', label: 'Purple' },
+          { border: 'border-amber-400', bg: 'bg-amber-400', ring: 'ring-amber-400/30', text: 'text-amber-300', label: 'Gold' },
+          { border: 'border-rose-400', bg: 'bg-rose-400', ring: 'ring-rose-400/30', text: 'text-rose-300', label: 'Red' },
+          { border: 'border-cyan-400', bg: 'bg-cyan-400', ring: 'ring-cyan-400/30', text: 'text-cyan-300', label: 'Cyan' },
+          { border: 'border-orange-400', bg: 'bg-orange-400', ring: 'ring-orange-400/30', text: 'text-orange-300', label: 'Orange' },
+          { border: 'border-pink-400', bg: 'bg-pink-400', ring: 'ring-pink-400/30', text: 'text-pink-300', label: 'Pink' },
+          { border: 'border-lime-400', bg: 'bg-lime-400', ring: 'ring-lime-400/30', text: 'text-lime-300', label: 'Lime' },
+        ]
+
+        const allPhotos = data.aiPhotos || []
+        const stacks = allPhotos.filter((p) => p.isStack)
+        const ungroupedPhotos = allPhotos.filter((p) => !p.isStack)
+
+        // Build a map: photoId → { stackId, colorIndex, groupSize }
+        const photoGroupMap = new Map<string, { stackId: string; colorIdx: number; groupSize: number }>()
+        stacks.forEach((stack, idx) => {
+          const colorIdx = idx % GROUP_COLORS.length
+          ;(stack.stackPhotos || []).forEach((sp) => {
+            photoGroupMap.set(String(sp.id), { stackId: String(stack.id), colorIdx, groupSize: (stack.stackPhotos || []).length })
+          })
+        })
+
+        // Flatten ALL photos for display (stacked + ungrouped)
+        const flatPhotos: AIPhoto[] = []
+        stacks.forEach((stack) => { (stack.stackPhotos || []).forEach((sp) => flatPhotos.push(sp)) })
+        ungroupedPhotos.forEach((p) => flatPhotos.push(p))
+
+        // Active group for "tap to add" mode
+        const activeGroupColor = stacks.findIndex((s) => String(s.id) === activeGroupId)
+
+        function handlePhotoTap(photoId: string) {
+          const groupInfo = photoGroupMap.get(photoId)
+
+          if (activeGroupId) {
+            // We have an active group — tap adds/removes from it
+            if (groupInfo && groupInfo.stackId === activeGroupId) {
+              // Already in this group — remove it
+              removeFromStack(activeGroupId, photoId)
+              return
+            }
+            if (groupInfo) {
+              // In a different group — move it
+              removeFromStack(groupInfo.stackId, photoId)
+            }
+            // Add to active group
+            addToStack(activeGroupId, photoId)
+            return
+          }
+
+          // If we have selected ungrouped photos and tapped a GROUPED photo → add all selected to that group
+          if (groupInfo && groupSelected.size > 0) {
+            const scrollTop = contentRef.current?.scrollTop ?? 0
+            const selectedIds = new Set(groupSelected)
+            updateData((current) => {
+              const photosToAdd = (current.aiPhotos || []).filter((p) => !p.isStack && selectedIds.has(String(p.id)))
+              if (!photosToAdd.length) return current
+              return {
+                ...current,
+                aiPhotos: (current.aiPhotos || [])
+                  .filter((p) => !selectedIds.has(String(p.id)))
+                  .map((p) => {
+                    if (String(p.id) !== groupInfo.stackId || !p.isStack) return p
+                    const newPhotos = [...(p.stackPhotos || []), ...photosToAdd]
+                    return {
+                      ...p,
+                      name: `Group (${newPhotos.length} photos)`,
+                      stackPhotos: newPhotos,
+                      stackPhotoIds: newPhotos.map((sp) => String(sp.id || '')),
+                      stackPhotoNames: newPhotos.map((sp) => String(sp.name || sp.filename || 'Photo')),
+                    }
+                  }),
+              }
+            })
+            setGroupSelected(new Set())
+            requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
+            return
+          }
+
+          if (groupInfo) {
+            // Tapped a grouped photo with nothing selected — activate that group for editing
+            setActiveGroupId(groupInfo.stackId)
+            return
+          }
+
+          // Tapped ungrouped photo — select/deselect for new group creation
+          setGroupSelected((prev) => {
+            const next = new Set(prev)
+            if (next.has(photoId)) next.delete(photoId); else next.add(photoId)
+            return next
+          })
+        }
+
+        function addToStack(stackId: string, photoId: string) {
+          const photo = ungroupedPhotos.find((p) => String(p.id) === photoId)
+          if (!photo) return
+          const scrollTop = contentRef.current?.scrollTop ?? 0
+          updateData((current) => ({
+            ...current,
+            aiPhotos: (current.aiPhotos || [])
+              .filter((p) => String(p.id) !== photoId)
+              .map((p) => {
+                if (String(p.id) !== stackId || !p.isStack) return p
+                return {
+                  ...p,
+                  name: `Group (${(p.stackPhotos || []).length + 1} photos)`,
+                  stackPhotos: [...(p.stackPhotos || []), photo],
+                  stackPhotoIds: [...(p.stackPhotoIds || []), String(photo.id || '')],
+                  stackPhotoNames: [...(p.stackPhotoNames || []), String(photo.name || photo.filename || 'Photo')],
+                }
+              }),
+          }))
+          requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
+        }
+
+        function removeFromStack(stackId: string, photoId: string) {
+          const scrollTop = contentRef.current?.scrollTop ?? 0
+          updateData((current) => {
+            const stack = (current.aiPhotos || []).find((p) => String(p.id) === stackId)
+            if (!stack?.isStack || !stack.stackPhotos) return current
+            const removed = stack.stackPhotos.find((sp) => String(sp.id) === photoId)
+            const remaining = stack.stackPhotos.filter((sp) => String(sp.id) !== photoId)
+            if (!removed) return current
+            if (remaining.length <= 1) {
+              // Dissolve stack
+              setActiveGroupId(null)
+              return { ...current, aiPhotos: [...remaining, removed, ...(current.aiPhotos || []).filter((p) => String(p.id) !== stackId)] }
+            }
+            return {
+              ...current,
+              aiPhotos: [
+                removed,
+                ...(current.aiPhotos || []).map((p) => {
+                  if (String(p.id) !== stackId) return p
+                  return { ...p, name: `Group (${remaining.length} photos)`, stackPhotos: remaining, stackPhotoIds: remaining.map((sp) => String(sp.id || '')), stackPhotoNames: remaining.map((sp) => String(sp.name || sp.filename || 'Photo')) }
+                }),
+              ],
+            }
+          })
+          requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
+        }
+
+        function handleCreateGroup() {
+          const selected = ungroupedPhotos.filter((p) => groupSelected.has(String(p.id)))
+          if (selected.length < 2) return
+          const scrollTop = contentRef.current?.scrollTop ?? 0
+          const stack = createPhotoStack(selected, data.aiAnalysisMode || 'ITEM_VIEW')
+          updateData((current) => ({
+            ...current,
+            aiPhotos: [{ ...stack, name: `Group (${selected.length} photos)` }, ...(current.aiPhotos || []).filter((p) => !groupSelected.has(String(p.id)))],
+          }))
+          setGroupSelected(new Set())
+          // Restore scroll after React re-render
+          requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
+        }
+
+        function handleDeletePhoto(photoId: string) {
+          const scrollTop = contentRef.current?.scrollTop ?? 0
+          updateData((current) => ({
+            ...current,
+            aiPhotos: (current.aiPhotos || []).filter((p) => String(p.id) !== photoId),
+          }))
+          setGroupSelected((prev) => { const n = new Set(prev); n.delete(photoId); return n })
+          requestAnimationFrame(() => { if (contentRef.current) contentRef.current.scrollTop = scrollTop })
+        }
+
+        function handleUngroupAll(stackId: string) {
+          updateData((current) => {
+            const target = (current.aiPhotos || []).find((p) => String(p.id) === stackId)
+            if (!target?.isStack || !target.stackPhotos) return current
+            return { ...current, aiPhotos: [...target.stackPhotos, ...(current.aiPhotos || []).filter((p) => String(p.id) !== stackId)] }
+          })
+          if (activeGroupId === stackId) setActiveGroupId(null)
+        }
+
+        if (flatPhotos.length === 0) {
+          return (
+            <div className="space-y-5">
+              <h3 className="text-lg font-semibold text-white">Group your photos</h3>
+              <p className="text-sm text-slate-400">No photos uploaded yet. Go back to add item photos first.</p>
+              <button className="button-secondary" onClick={previousStep} type="button">Go Back</button>
+            </div>
+          )
+        }
+
+        return (
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Group your photos</h3>
+              <p className="mt-2 text-sm leading-7 text-slate-300">
+                {activeGroupId
+                  ? 'Tap photos to add or remove them from this group. Tap "Done" when finished.'
+                  : 'Select 2+ photos and tap "Create Group". To add to an existing group, select the photo(s) first, then tap any photo already in that group.'}
+              </p>
+            </div>
+
+            {/* Active group controls — sticky at bottom */}
+
+            {/* Group legend */}
+            {stacks.length > 0 && !activeGroupId && (
+              <div className="flex flex-wrap gap-2">
+                {stacks.map((stack, idx) => {
+                  const c = GROUP_COLORS[idx % GROUP_COLORS.length]
+                  return (
+                    <button
+                      key={String(stack.id)}
+                      className={`flex items-center gap-2 rounded-lg border ${c.border} bg-slate-950/40 px-3 py-1.5 text-xs ${c.text}`}
+                      onClick={() => setActiveGroupId(String(stack.id))}
+                      type="button"
+                    >
+                      <span className={`inline-block h-3 w-3 rounded-full ${c.bg}`} />
+                      {(stack.stackPhotos || []).length} photos
+                      <span className="text-slate-500">— tap to edit</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Flat photo grid — ALL photos always visible */}
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+              {flatPhotos.map((photo) => {
+                const pid = String(photo.id)
+                const groupInfo = photoGroupMap.get(pid)
+                const isGrouped = Boolean(groupInfo)
+                const colorIdx = groupInfo ? groupInfo.colorIdx : -1
+                const c = colorIdx >= 0 ? GROUP_COLORS[colorIdx % GROUP_COLORS.length] : null
+                const isInActiveGroup = activeGroupId && groupInfo?.stackId === activeGroupId
+                const isSelected = groupSelected.has(pid)
+                const src = photo.url || photo.thumbUrl || photo.dataUrl
+
+                let borderClass = 'border-transparent'
+                if (isInActiveGroup) borderClass = `${c!.border} ring-2 ${c!.ring}`
+                else if (isGrouped && c) borderClass = c.border
+                else if (isSelected) borderClass = 'border-sky-400'
+
+                return (
+                  <div
+                    key={pid}
+                    className={`relative rounded-xl overflow-hidden border-3 transition-all cursor-pointer ${borderClass}`}
+                    onClick={() => handlePhotoTap(pid)}
+                  >
+                    {src ? (
+                      <img src={src} alt={photo.name || 'Photo'} className="h-24 w-full rounded-t-xl bg-slate-900 object-contain" />
+                    ) : (
+                      <div className="flex h-24 items-center justify-center rounded-t-xl bg-slate-800 text-xs text-slate-500">{photo.name || 'Photo'}</div>
+                    )}
+                    {/* Group badge */}
+                    {isGrouped && c && (
+                      <div className={`absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full ${c.bg} text-[10px] font-bold text-white`}>
+                        {groupInfo!.groupSize}
+                      </div>
+                    )}
+                    {/* Selection check */}
+                    {isSelected && !isGrouped && (
+                      <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-sky-400 text-[10px] font-bold text-white">✓</div>
+                    )}
+                    <p className="truncate px-1 py-1 text-[10px] text-slate-400">{photo.name || photo.filename || 'Photo'}</p>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Floating action bar — sticky at bottom of scroll area */}
+            {(groupSelected.size >= 1 || activeGroupId) && (
+              <div className="sticky bottom-0 z-10 -mx-5 border-t border-[color:var(--border)] bg-slate-900/95 px-5 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
+                {activeGroupId ? (
+                  <div className="flex items-center gap-3">
+                    <div className={`h-4 w-4 rounded-full flex-shrink-0 ${GROUP_COLORS[activeGroupColor >= 0 ? activeGroupColor % GROUP_COLORS.length : 0].bg}`} />
+                    <span className="text-sm text-white flex-1">Editing {GROUP_COLORS[activeGroupColor >= 0 ? activeGroupColor % GROUP_COLORS.length : 0].label} group — tap photos to add/remove</span>
+                    <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => handleUngroupAll(activeGroupId)} type="button">Ungroup</button>
+                    <button className="button-primary px-3 py-1.5 text-xs" onClick={() => setActiveGroupId(null)} type="button">Done</button>
+                  </div>
+                ) : groupSelected.size === 1 ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-300">1 photo selected</span>
+                    <div className="flex gap-2">
+                      <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => setGroupSelected(new Set())} type="button">Cancel</button>
+                      <button className="rounded-lg bg-rose-500/90 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500" onClick={() => {
+                        const id = [...groupSelected][0]
+                        handleDeletePhoto(id)
+                      }} type="button">Delete Photo</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-300">{groupSelected.size} photos selected</span>
+                    <div className="flex gap-2">
+                      <button className="button-secondary px-3 py-1.5 text-xs" onClick={() => setGroupSelected(new Set())} type="button">Cancel</button>
+                      <button className="button-primary px-4 py-2 text-sm" onClick={handleCreateGroup} type="button">Create Group</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-3 pt-2">
+              <button className="button-primary" onClick={() => { setActiveGroupId(null); setGroupSelected(new Set()); nextStep() }} type="button">Continue</button>
+              <button className="button-secondary" onClick={() => { setActiveGroupId(null); setGroupSelected(new Set()); nextStep() }} type="button">Skip — each photo is a different item</button>
+            </div>
+          </div>
+        )
+      }
+      case 12: {
         const itemCount = (data.contents || []).filter((i) => i.includedInClaim !== false).length
         const totalValue = (data.contents || []).reduce((sum, i) => sum + Number(i.replacementCost || 0), 0)
         return (
@@ -1433,13 +1760,13 @@ export function WizardSteps() {
             ) : (
               <div className="rounded-2xl border border-dashed border-[color:var(--border)] px-5 py-8 text-center">
                 <p className="text-sm text-slate-400">No items found yet. Go back to the previous step to scan your photos, or continue and add items manually later.</p>
-                <button className="button-primary mt-4" onClick={previousStep} type="button">Go Back</button>
+                <button className="button-primary mt-4" onClick={previousStep} type="button">Go Back to Photo Scan</button>
               </div>
             )}
           </div>
         )
       }
-      case 12:
+      case 13:
         return (
           <div className="space-y-5">
             <div className="rounded-3xl border border-emerald-400/25 bg-emerald-400/10 px-5 py-5">

@@ -472,15 +472,6 @@ function validateEnrichPayload(payload) {
     return payload && typeof payload === "object" && payload.revised && typeof payload.revised === "object";
 }
 
-
-function validateReceiptPayload(payload) {
-    return payload && typeof payload === "object" && Array.isArray(payload.items);
-}
-
-function validateContractorReportPayload(payload) {
-    return payload && typeof payload === "object" && typeof payload.companyName === "string";
-}
-
 function normalizePrescreenResult(payload) {
     const rawType = String(payload.type || "").toLowerCase().trim().replace(/\s+/g, "_");
     const type = rawType === "room_scan" ? "room_scan" : "focus_item";

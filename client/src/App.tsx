@@ -21,6 +21,7 @@ const ClaimInfo = lazy(() => import('@/tabs/ClaimInfo/ClaimInfo').then((m) => ({
 const Rooms = lazy(() => import('@/tabs/Rooms/Rooms').then((m) => ({ default: m.Rooms })))
 const FloorPlan = lazy(() => import('@/tabs/FloorPlan/FloorPlan').then((m) => ({ default: m.FloorPlan })))
 const PhotoLibrary = lazy(() => import('@/tabs/PhotoLibrary/PhotoLibrary').then((m) => ({ default: m.PhotoLibrary })))
+const AIBuilder = lazy(() => import('@/tabs/AIBuilder/AIBuilder').then((m) => ({ default: m.AIBuilder })))
 const Contents = lazy(() => import('@/tabs/Contents/Contents').then((m) => ({ default: m.Contents })))
 const Receipts = lazy(() => import('@/tabs/Receipts/Receipts').then((m) => ({ default: m.Receipts })))
 const Expenses = lazy(() => import('@/tabs/Expenses/Expenses').then((m) => ({ default: m.Expenses })))
@@ -36,6 +37,7 @@ const tabComponents: Record<Exclude<ClaimTabId, 'maximizer'>, ComponentType> = {
   rooms: Rooms,
   'floor-plan': FloorPlan,
   'photo-library': PhotoLibrary,
+  'ai-builder': AIBuilder,
   contents: Contents,
   receipts: Receipts,
   expenses: Expenses,

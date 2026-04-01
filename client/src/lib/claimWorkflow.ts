@@ -158,7 +158,7 @@ export interface NextStepSuggestion {
   title: string
   description: string
   actionLabel: string
-  targetTab: 'dashboard' | 'claim-info' | 'rooms' | 'photo-library' | 'contents'
+  targetTab: 'dashboard' | 'claim-info' | 'rooms' | 'photo-library' | 'ai-builder' | 'contents'
 }
 
 export interface ReadinessCheck {
@@ -219,6 +219,41 @@ export function normalizeDisposition(value: string | null | undefined) {
   return raw
 }
 
+export function normalizeAnalysisMode(mode: unknown, fallback: AnalysisMode = 'ITEM_VIEW'): AnalysisMode {
+  if (mode === 'FOCUS_ITEM') return 'ITEM_VIEW'
+  if (mode === 'ROOM_SCAN') return 'ROOM_VIEW'
+  if (mode === 'ITEM_VIEW' || mode === 'ROOM_VIEW' || mode === 'FOCUSED_VIEW') return mode
+  return fallback
+}
+
+export function analysisModeLabel(mode: unknown) {
+  const normalized = normalizeAnalysisMode(mode)
+  if (normalized === 'ROOM_VIEW') return 'Room View'
+  if (normalized === 'FOCUSED_VIEW') return 'Focused View'
+  return 'Item View'
+}
+
+export function mapAnalysisModeToBackend(mode: unknown) {
+  const normalized = normalizeAnalysisMode(mode)
+  if (normalized === 'ROOM_VIEW') return 'ROOM_SCAN'
+  if (normalized === 'FOCUSED_VIEW') return 'ROOM_SCAN'
+  return 'FOCUS_ITEM'
+}
+
+export function mapAnalysisModeToPrescreenType(mode: unknown) {
+  const normalized = normalizeAnalysisMode(mode)
+  if (normalized === 'ROOM_VIEW') return 'room_scan'
+  if (normalized === 'FOCUSED_VIEW') return 'focused_view'
+  return 'focus_item'
+}
+
+export function mapPrescreenTypeToAnalysisMode(type: unknown): AnalysisMode {
+  const raw = String(type || '').toLowerCase()
+  if (raw === 'room_scan' || raw === 'room_view') return 'ROOM_VIEW'
+  if (raw === 'focused_view' || raw === 'focus_area') return 'FOCUSED_VIEW'
+  return 'ITEM_VIEW'
+}
+
 function parseNumber(value: unknown) {
   const num = Number(value)
   return Number.isFinite(num) ? num : 0
@@ -230,7 +265,6 @@ export function parseMoneyValue(value: unknown) {
   const parsed = Number.parseFloat(cleaned)
   return Number.isFinite(parsed) ? parsed : 0
 }
-
 
 
 function countItemPhotos(item: ContentItem) {
@@ -1003,15 +1037,15 @@ export function getNextStepSuggestion(data: ClaimData): NextStepSuggestion {
   if (!summary.photoCount) {
     return {
       title: 'Add photo evidence',
-      description: 'Upload room or item photos for documentation and support.',
-      actionLabel: 'Go to Photo Library',
-      targetTab: 'photo-library',
+      description: 'Upload room or item photos so AI analysis and documentation have support.',
+      actionLabel: 'Go to AI Builder',
+      targetTab: 'ai-builder',
     }
   }
   if (!summary.itemCount) {
     return {
       title: 'Start the contents inventory',
-      description: 'Create the first few line items to seed the inventory.',
+      description: 'Create the first few line items manually or use AI Builder output to seed the list.',
       actionLabel: 'Open Contents',
       targetTab: 'contents',
     }
@@ -1093,8 +1127,36 @@ export function buildClaimSummary(data: ClaimData) {
   }
 }
 
-function matchPhotoToAI(_data: ClaimData, _photo: FileItem | AIPhoto, _roomName: string) {
-  return { analysisMode: '' as AnalysisMode | '', aiResultId: null as string | null, aiItemCount: 0 }
+export function autoImportPhotosToAIBuilder(data: ClaimData) {
+  if ((data.aiPhotos || []).length > 0) return data.aiPhotos
+  return (data.photoLibrary || []).map((photo) => ({
+    ...photo,
+    id: photo.id || crypto.randomUUID(),
+    status: 'pending' as const,
+    roomName: String((photo as { roomName?: string }).roomName || ''),
+    analysisMode: data.aiAnalysisMode || 'ITEM_VIEW',
+    source: 'auto-import',
+  }))
+}
+
+function matchPhotoToAI(data: ClaimData, photo: FileItem | AIPhoto, roomName: string) {
+  const directId = String((photo as { id?: string | number }).id || '')
+  const directPath = String(photo.path || '')
+  const directName = String(photo.name || photo.filename || '')
+  const aiPhoto = (data.aiPhotos || []).find((entry) => {
+    const sameId = directId && String(entry.id || '') === directId
+    const samePath = directPath && String(entry.path || '') === directPath
+    const sameUrl = photo.url && entry.url && String(entry.url) === String(photo.url)
+    const sameName = directName && String(entry.name || entry.filename || '') === directName && String(entry.roomName || '') === roomName
+    return sameId || samePath || sameUrl || sameName
+  })
+  if (!aiPhoto) return { aiResultId: null, aiItemCount: 0, analysisMode: '' as const }
+  const aiResult = (data.aiResults || []).find((result) => String(result.photoId || '') === String(aiPhoto.id || ''))
+  return {
+    aiResultId: aiResult ? String(aiResult.id || '') : null,
+    aiItemCount: (aiResult?.detectedItems || []).length,
+    analysisMode: normalizeAnalysisMode(aiPhoto.analysisMode || '', 'ITEM_VIEW'),
+  }
 }
 
 export function buildPhotoLibraryEntries(data: ClaimData): PhotoLibraryEntry[] {
@@ -1437,6 +1499,27 @@ export function deduplicateItemsBySourcePhotos(items: ContentItem[]) {
 
 export function deduplicateDraftItemsBySourcePhotos(items: ContentItem[]) {
   return deduplicateItemsBySourcePhotos(items)
+}
+
+export function createPhotoStack(photos: AIPhoto[], defaultMode: AnalysisMode): AIPhoto {
+  const base = photos[0]
+  const sameRoom = photos.every((photo) => String(photo.roomId || '') === String(base.roomId || ''))
+  const sameMode = photos.every((photo) => photo.analysisMode === base.analysisMode)
+  return {
+    id: crypto.randomUUID(),
+    isStack: true,
+    name: `Photo Stack (${photos.length})`,
+    stackPhotos: photos.map((photo) => ({ ...photo })),
+    stackPhotoIds: photos.map((photo) => String(photo.id || '')),
+    stackPhotoNames: photos.map((photo) => String(photo.name || photo.filename || 'Photo')),
+    roomId: sameRoom ? base.roomId : null,
+    roomName: sameRoom ? base.roomName : 'Mixed',
+    uploadedAt: new Date().toISOString(),
+    status: 'pending',
+    analysisMode: sameMode ? (base.analysisMode || defaultMode) : defaultMode,
+    source: 'stack',
+    collapsed: true,
+  }
 }
 
 // Fuzzy duplicate detection for contents
