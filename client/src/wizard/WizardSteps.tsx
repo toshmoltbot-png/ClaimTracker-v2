@@ -113,9 +113,9 @@ export function WizardSteps() {
   const [aiRunning, setAiRunning] = useState(false)
   const aiAbortRef = useRef<AbortController | null>(null)
   const [groupSelected, setGroupSelected] = useState<Set<string>>(new Set())
-  const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set())
-  const [dragPhotoId, setDragPhotoId] = useState<string | null>(null)
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  const [_expandedStacks, _setExpandedStacks] = useState<Set<string>>(new Set())
+  const [_dragPhotoId, _setDragPhotoId] = useState<string | null>(null)
+  const [_dropTargetId, _setDropTargetId] = useState<string | null>(null)
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
 
   const handlePolicyUpload = async (file: File) => {
@@ -393,8 +393,16 @@ export function WizardSteps() {
     const controller = new AbortController()
     aiAbortRef.current = controller
 
+    let photoIndex = 0
     for (const photo of pending) {
       if (controller.signal.aborted) break
+
+      // Pace requests: 1.5s delay between photos to avoid upstream rate limits
+      if (photoIndex > 0) {
+        await new Promise((r) => setTimeout(r, 1500))
+      }
+      photoIndex += 1
+
       const photoId = String(photo.id || '')
 
       // Mark as analyzing

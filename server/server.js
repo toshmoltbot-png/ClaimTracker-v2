@@ -929,6 +929,13 @@ app.post("/api/analyze-photo", rateLimiter, async (req, res) => {
             ? Number(upstreamStatus)
             : 502;
 
+        // Forward Retry-After on 429 from upstream
+        if (statusToReturn === 429) {
+            const upstreamRetryAfter = err.response?.headers?.["retry-after"] || err.headers?.["retry-after"];
+            const retryAfterSec = upstreamRetryAfter ? parseInt(upstreamRetryAfter, 10) : 5;
+            res.set("Retry-After", String(isNaN(retryAfterSec) ? 5 : Math.max(2, Math.min(60, retryAfterSec))));
+        }
+
         const upstreamBodyTruncated = String(upstreamBodyRaw).slice(0, 2000);
         const payload = {
             error: "VISION_UPSTREAM_ERROR",
@@ -939,6 +946,7 @@ app.post("/api/analyze-photo", rateLimiter, async (req, res) => {
         };
         if (inferred) payload.inferred = true;
         if (inferenceReason) payload.inferenceReason = inferenceReason;
+        if (statusToReturn === 429) payload.retryAfter = parseInt(res.getHeader("Retry-After") || "5", 10);
 
         log({
             event: "analyze_photo_error",

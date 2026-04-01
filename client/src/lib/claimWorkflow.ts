@@ -1269,11 +1269,13 @@ export async function analyzePhotoVisionWithRetry(
   photo: AIPhoto,
   options?: { analysisMode?: AnalysisMode; fastMode?: boolean; signal?: AbortSignal; maxRetries?: number },
 ) {
-  const maxRetries = options?.maxRetries ?? 3
+  // 429s get more retries since they're transient rate limits
+  const baseMaxRetries = options?.maxRetries ?? 3
   let attempt = 0
   let lastError: unknown
+  let effectiveMaxRetries = baseMaxRetries
 
-  while (attempt <= maxRetries) {
+  while (attempt <= effectiveMaxRetries) {
     try {
       const response = await apiClient.analyzePhoto(await analyzePhotoRequestBody(data, photo, options))
       return response
@@ -1283,11 +1285,20 @@ export async function analyzePhotoVisionWithRetry(
       const message = error instanceof Error ? error.message : String(error)
       const statusMatch = message.match(/\b(\d{3})\b/)
       const status = statusMatch ? Number(statusMatch[1]) : null
-      if (!status || !ANALYZE_RETRYABLE_STATUS.has(status) || attempt >= maxRetries) {
+      if (!status || !ANALYZE_RETRYABLE_STATUS.has(status)) {
         throw error
       }
-      // Longer backoff for 429s (rate limit) vs other retryable errors
-      const backoffMs = status === 429 ? 3000 * (attempt + 1) : 750 * (attempt + 1)
+      // Allow up to 6 retries for 429 (rate limit) — these always resolve with patience
+      if (status === 429 && effectiveMaxRetries < 6) {
+        effectiveMaxRetries = 6
+      }
+      if (attempt >= effectiveMaxRetries) {
+        throw error
+      }
+      // Exponential backoff: 429 → 5s/10s/20s/30s/30s/30s, others → 1s/2s/4s
+      const backoffMs = status === 429
+        ? Math.min(30000, 5000 * Math.pow(2, attempt))
+        : Math.min(8000, 1000 * Math.pow(2, attempt))
       await new Promise((resolve) => window.setTimeout(resolve, backoffMs))
       attempt += 1
     }
