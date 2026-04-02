@@ -113,7 +113,7 @@ export function WizardSteps() {
   const [_dragPhotoId, _setDragPhotoId] = useState<string | null>(null)
   const [_dropTargetId, _setDropTargetId] = useState<string | null>(null)
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
-  const [itemDraft, setItemDraft] = useState({ name: '', room: '', value: '', category: '' })
+  const [itemDraft, setItemDraft] = useState({ name: '', room: '', value: '', category: '', link: '' })
 
   const handlePolicyUpload = async (file: File) => {
     setPolicyUploadStatus(`Processing ${file.name}...`)
@@ -1826,7 +1826,7 @@ export function WizardSteps() {
         const claimedPhotoIds = new Set((data.contents || []).map((c) => (c as Record<string, unknown>).sourcePhotoId).filter(Boolean).map(String))
         const unclaimedCards = photoCards.filter((c) => !claimedPhotoIds.has(c.id))
 
-        function addItemFromCard(cardId: string, name: string, room: string, value: string, category: string) {
+        function addItemFromCard(cardId: string, name: string, room: string, value: string, category: string, replacementLink: string) {
           if (!name.trim()) { pushToast('Enter an item name.', 'warning'); return }
           const card = photoCards.find((c) => c.id === cardId)
           const newItem = {
@@ -1840,6 +1840,7 @@ export function WizardSteps() {
             quantityUnit: 'each' as const,
             replacementCost: Number(value) || 0,
             unitPrice: Number(value) || 0,
+            replacementLink: replacementLink.trim() || undefined,
             contaminated: data.claimType === 'category3_sewage',
             disposition: 'inspected',
             source: 'wizard-photo',
@@ -1866,6 +1867,7 @@ export function WizardSteps() {
             quantityUnit: 'each' as const,
             replacementCost: Number(itemDraft.value) || 0,
             unitPrice: Number(itemDraft.value) || 0,
+            replacementLink: itemDraft.link.trim() || undefined,
             contaminated: data.claimType === 'category3_sewage',
             disposition: 'inspected',
             source: 'manual',
@@ -1873,7 +1875,7 @@ export function WizardSteps() {
             includedInClaim: true,
           }
           updateData((current) => ({ ...current, contents: [...current.contents, newItem] }))
-          setItemDraft({ name: '', room: itemDraft.room, value: '', category: '' })
+          setItemDraft({ name: '', room: itemDraft.room, value: '', category: '', link: '' })
           pushToast(`"${newItem.itemName}" added.`, 'success')
         }
 
@@ -1928,6 +1930,7 @@ export function WizardSteps() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-white">{item.itemName || 'Unnamed'}</p>
                           <p className="text-xs text-slate-500">{item.room || 'No room'}{item.category ? ` · ${item.category}` : ''}</p>
+                          {item.replacementLink && <a className="text-[10px] text-sky-400 hover:text-sky-300 truncate block max-w-[200px]" href={item.replacementLink} target="_blank" rel="noreferrer">{item.replacementLink}</a>}
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-sm font-semibold text-slate-200">{formatCurrency(Number(item.replacementCost || 0))}</span>
@@ -1999,6 +2002,17 @@ export function WizardSteps() {
                       <option value="Other">Other</option>
                     </select>
                   </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400">Replacement link</label>
+                  <input
+                    className="field mt-1 w-full"
+                    type="url"
+                    placeholder="https://amazon.com/…"
+                    value={itemDraft.link}
+                    onChange={(e) => setItemDraft((d) => ({ ...d, link: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') addItem() }}
+                  />
                 </div>
                 <button className="button-primary" onClick={addItem} type="button">
                   + Add Item

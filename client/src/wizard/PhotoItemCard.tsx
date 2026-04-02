@@ -5,7 +5,7 @@ interface PhotoItemCardProps {
   photos: Array<{ src: string; name: string }>
   defaultRoom: string
   roomOptions: Array<{ id: string; name: string }>
-  onAdd: (cardId: string, name: string, room: string, value: string, category: string) => void
+  onAdd: (cardId: string, name: string, room: string, value: string, category: string, replacementLink: string) => void
 }
 
 const CATEGORIES = [
@@ -19,10 +19,11 @@ export function PhotoItemCard({ cardId, photos, defaultRoom, roomOptions, onAdd 
   const [room, setRoom] = useState(defaultRoom)
   const [value, setValue] = useState('')
   const [category, setCategory] = useState('')
+  const [link, setLink] = useState('')
   const [added, setAdded] = useState(false)
 
   function handleAdd() {
-    onAdd(cardId, name, room, value, category)
+    onAdd(cardId, name, room, value, category, link)
     setAdded(true)
   }
 
@@ -121,6 +122,17 @@ export function PhotoItemCard({ cardId, photos, defaultRoom, roomOptions, onAdd 
                 {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400">Replacement link</label>
+            <input
+              className="field mt-1 w-full"
+              type="url"
+              placeholder="https://amazon.com/…"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) handleAdd() }}
+            />
           </div>
           <button
             className="button-primary text-sm"
